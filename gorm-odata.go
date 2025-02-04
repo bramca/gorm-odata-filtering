@@ -204,20 +204,19 @@ func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, err
 		return db, err
 	}
 
-	nodesVisited := map[int]bool{}
-	db, nodesVisited, err = buildGormQuery(tree.Root, db, nodesVisited)
+	db, err = buildGormQuery(tree.Root, db)
 
 	return db, err
 }
 
-func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, nodesVisited map[int]bool) (*gorm.DB, map[int]bool, error) {
+func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 	switch root.Type {
 	case syntaxtree.Operator:
 		switch root.Value {
 		case "and":
-			db = db.Where(buildGormQuery(root.LeftChild, db, nodesVisited)).Where(buildGormQuery(root.RightChild, db, nodesVisited))
+			db = db.Where(buildGormQuery(root.LeftChild, db)).Where(buildGormQuery(root.RightChild, db))
 		case "or":
-			db = db.Where(buildGormQuery(root.LeftChild, db, nodesVisited)).Or(buildGormQuery(root.RightChild, db, nodesVisited))
+			db = db.Where(buildGormQuery(root.LeftChild, db)).Or(buildGormQuery(root.RightChild, db))
 		case "eq", "ne", "lt", "le", "gt", "ge":
 			// Build up left child
 			leftChild := root.LeftChild
@@ -305,10 +304,10 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, nodesVisited map[int]boo
 			db = db.Where(queryString)
 		}
 	default:
-		return db, nodesVisited, errors.New("invalid query")
+		return db, errors.New("invalid query")
 	}
 
-	return db, nodesVisited, nil
+	return db, nil
 }
 
 func buildConcat(root *syntaxtree.Node) string {

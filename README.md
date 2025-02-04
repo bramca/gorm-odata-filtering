@@ -9,4 +9,38 @@ It builds the correct gorm query based on an odata filter string.
 
 ## 📋 Example
 
-TODO
+``` go
+package main
+
+import (
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
+	gormodata "github.com/bramca/gorm-odata-filtering"
+)
+
+type MockModel struct {
+	ID        string
+	Name      string
+	TestValue string
+}
+
+func main() {
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+	db.AutoMigrate(&MockModel{})
+
+	odataQueryBuilder := gormodata.NewOdataQueryBuilder()
+
+	queryString := "name eq 'test' and (contains(testValue,'testvalue') or contains(testValue,'accvalue'))"
+
+	var result []MockModel
+	dbQuery, err := odataQueryBuilder.BuildQuery(queryString, db)
+
+	if err != nil {
+		panic(err)
+	}
+
+	dbQuery.Find(&result)
+}
+
+```
