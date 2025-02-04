@@ -244,14 +244,13 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 				queryRightOperandString = rightChild.Value
 			}
 
-			// TODO: if the leftoperand contains an expansion token ('/') then we should create a map according to this format
-			// Builds a map in this format
+			// TODO: if the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
 			// Filters: []map[string]interface {}{
 			// 	map[string]interface {}{
-			// 		"name":[]string{"nc-nsxv-pod5-dcr-red"},
-			// 		"network_containers":map[string]interface {}{
-			// 			"subnet":[]string{"10.3.112.0"}
+			// 		"name":[]string{"test"},
+			// 		"metadata":map[string]interface {}{
+			// 			"name":[]string{"test-metadata"}
 			// 		}
 			// 	},
 			// 	map[string]interface {}{
@@ -285,14 +284,13 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 
 			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
 
-			// TODO: if the leftoperand contains an expansion token ('/') then we should create a map according to this format
-			// Builds a map in this format
+			// TODO: if the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
 			// Filters: []map[string]interface {}{
 			// 	map[string]interface {}{
-			// 		"name":[]string{"nc-nsxv-pod5-dcr-red"},
-			// 		"network_containers":map[string]interface {}{
-			// 			"subnet":[]string{"10.3.112.0"}
+			// 		"name":[]string{"test"},
+			// 		"metadata":map[string]interface {}{
+			// 			"name":[]string{"test-metadata"}
 			// 		}
 			// 	},
 			// 	map[string]interface {}{
