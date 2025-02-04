@@ -1,7 +1,6 @@
 package gormodata
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -195,8 +194,6 @@ func Test_BuildQuery_Success(t *testing.T) {
 			dbQuery, err = odataFilter.BuildQuery(testData.queryString, db)
 
 			queryResult := dbQuery.Find(&result)
-			fmt.Printf("result: %+v\n", result)
-			fmt.Printf("queryResult: %+v", queryResult)
 
 			// Assert
 			assert.NoError(t, err)
