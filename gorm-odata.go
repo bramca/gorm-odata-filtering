@@ -4,19 +4,44 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
+	"github.com/stoewer/go-strcase"
 	"gorm.io/gorm"
 )
 
-var operatorTranslation = map[string]string{
-	"eq": "",
-	"ne": "!=",
-	"lt": "<",
-	"le": "<=",
-	"gt": ">",
-	"ge": ">=",
-}
+var (
+	operatorTranslation = map[string]string{
+		"eq": "=",
+		"ne": "!=",
+		"lt": "<",
+		"le": "<=",
+		"gt": ">",
+		"ge": ">=",
+	}
+
+	unaryFunctionTranslation = map[string]string{
+		"length":           "LENGTH",
+		"indexof":          "LOCATE",
+		"tolower":          "LOWER",
+		"toupper":          "UPPER",
+		"trim":             "TRIM",
+		"year":             "YEAR",
+		"month":            "MONTH",
+		"day":              "DAY",
+		"hour":             "HOUR",
+		"minute":           "MINUTE",
+		"second":           "SECOND",
+		"fractionalsecond": "MICROSECOND",
+		"date":             "DATE",
+		"time":             "TIME",
+		"now":              "NOW",
+		"round":            "ROUND",
+		"floor":            "FLOOR",
+		"ceiling":          "CEIL",
+	}
+)
 
 type OdataQueryBuilder struct {
 	OperatorPrecedence []string
@@ -25,8 +50,9 @@ type OdataQueryBuilder struct {
 	UnaryFunctions     []syntaxtree.UnaryFunctionParser
 }
 
-func (o *OdataQueryBuilder) NewOdataQueryBuilder() *OdataQueryBuilder {
-	o.OperatorPrecedence =  []string{
+func NewOdataQueryBuilder() *OdataQueryBuilder {
+	o := &OdataQueryBuilder{}
+	o.OperatorPrecedence = []string{
 		"length",
 		"indexof",
 		"tolower",
@@ -147,6 +173,23 @@ func (o *OdataQueryBuilder) NewOdataQueryBuilder() *OdataQueryBuilder {
 	return o
 }
 
+func (o *OdataQueryBuilder) PrintTree(query string) (string, error) {
+	tree := syntaxtree.SyntaxTree{
+		OperatorPrecedence:    o.OperatorPrecedence,
+		OperatorParsers:       o.OperatorParsers,
+		BinaryFunctionParsers: o.BinaryFunctions,
+		UnaryFunctionParsers:  o.UnaryFunctions,
+		Separator:             ";",
+	}
+
+	err := tree.ConstructTree(query)
+	if err != nil {
+		return "", err
+	}
+
+	return tree.String(), nil
+}
+
 func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, error) {
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    o.OperatorPrecedence,
@@ -161,63 +204,151 @@ func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, err
 		return db, err
 	}
 
-	fmt.Printf("tree:\n%s\n", tree)
-
 	nodesVisited := map[int]bool{}
 	db, nodesVisited, err = buildGormQuery(tree.Root, db, nodesVisited)
 
 	return db, err
 }
 
-func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, nodesVisited map[int]bool) (*gorm.DB, map[int]bool, error){
+func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, nodesVisited map[int]bool) (*gorm.DB, map[int]bool, error) {
 	switch root.Type {
 	case syntaxtree.Operator:
-		switch root.Value{
+		switch root.Value {
 		case "and":
 			db = db.Where(buildGormQuery(root.LeftChild, db, nodesVisited)).Where(buildGormQuery(root.RightChild, db, nodesVisited))
 		case "or":
 			db = db.Where(buildGormQuery(root.LeftChild, db, nodesVisited)).Or(buildGormQuery(root.RightChild, db, nodesVisited))
 		case "eq", "ne", "lt", "le", "gt", "ge":
+			// Build up left child
 			leftChild := root.LeftChild
-			operatorVisited := map[int]bool{}
 			queryLeftOperandString := ""
 			if leftChild.Type == syntaxtree.UnaryOperator {
-				for leftChild.Type == syntaxtree.UnaryOperator && operatorVisited[leftChild.Id] {
-					if leftChild.LeftChild.Type == syntaxtree.UnaryOperator && !operatorVisited[leftChild.LeftChild.Id] {
-						continue
-					}
-					operatorVisited[leftChild.Id] = true
-					if queryLeftOperandString == "" {
-						queryLeftOperandString = fmt.Sprintf("%s(%s)", leftChild.Value, leftChild.LeftChild.Value)
-					} else {
-						queryLeftOperandString = fmt.Sprintf("%s(%s)", leftChild.Value, queryLeftOperandString)
-					}
-					leftChild = leftChild.Parent
-
-				}
+				queryLeftOperandString = buildUnaryFuncChain(leftChild)
+			}
+			if leftChild.Value == "concat" {
+				queryLeftOperandString = buildConcat(leftChild)
 			}
 			if leftChild.Type == syntaxtree.LeftOperand {
-				queryLeftOperandString = leftChild.Value
-				// TODO: if the leftoperand contains an expansion token ('/') then we should create a map according to this format
-				// Builds a map in this format
-				// Filters: []map[string]interface {}{
-				// 	map[string]interface {}{
-				// 		"name":[]string{"nc-nsxv-pod5-dcr-red"},
-				// 		"network_containers":map[string]interface {}{
-				// 			"subnet":[]string{"10.3.112.0"}
-				// 		}
-				// 	},
-				// 	map[string]interface {}{
-				// 		"id":"<12"
-				// 	},
-				// }
+				queryLeftOperandString = strcase.SnakeCase(leftChild.Value)
 			}
-			queryString := fmt.Sprintf("%s %s ?", queryLeftOperandString, operatorTranslation[root.Value])
-			db = db.Where(queryString, root.RightChild.Value)
+
+			// Build up right child
+			rightChild := root.RightChild
+			queryRightOperandString := ""
+			if rightChild.Type == syntaxtree.UnaryOperator {
+				queryRightOperandString = buildUnaryFuncChain(rightChild)
+			}
+			if rightChild.Value == "concat" {
+				queryRightOperandString = buildConcat(rightChild)
+			}
+			if rightChild.Type == syntaxtree.RightOperand {
+				queryRightOperandString = rightChild.Value
+			}
+
+			// TODO: if the leftoperand contains an expansion token ('/') then we should create a map according to this format
+			// Builds a map in this format
+			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
+			// Filters: []map[string]interface {}{
+			// 	map[string]interface {}{
+			// 		"name":[]string{"nc-nsxv-pod5-dcr-red"},
+			// 		"network_containers":map[string]interface {}{
+			// 			"subnet":[]string{"10.3.112.0"}
+			// 		}
+			// 	},
+			// 	map[string]interface {}{
+			// 		"id":"<12"
+			// 	},
+			// }
+
+			queryString := fmt.Sprintf("%s %s %s", queryLeftOperandString, operatorTranslation[root.Value], queryRightOperandString)
+			db = db.Where(queryString)
+		case "contains", "startswith", "endswith":
+			// Build up left child
+			leftChild := root.LeftChild
+			queryLeftOperandString := ""
+			if leftChild.Type == syntaxtree.UnaryOperator {
+				queryLeftOperandString = buildUnaryFuncChain(leftChild)
+			}
+			if leftChild.Value == "concat" {
+				queryLeftOperandString = buildConcat(leftChild)
+			}
+			if leftChild.Type == syntaxtree.LeftOperand {
+				queryLeftOperandString = strcase.SnakeCase(leftChild.Value)
+			}
+
+			// Build up right child
+			queryRightOperandString := root.RightChild.Value
+			rightOperandTranslation := map[string]string{
+				"contains":  `'%$1%'`,
+				"startwith": `'$1%'`,
+				"endswith":  `'%$1'`,
+			}
+
+			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
+
+			// TODO: if the leftoperand contains an expansion token ('/') then we should create a map according to this format
+			// Builds a map in this format
+			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
+			// Filters: []map[string]interface {}{
+			// 	map[string]interface {}{
+			// 		"name":[]string{"nc-nsxv-pod5-dcr-red"},
+			// 		"network_containers":map[string]interface {}{
+			// 			"subnet":[]string{"10.3.112.0"}
+			// 		}
+			// 	},
+			// 	map[string]interface {}{
+			// 		"id":"<12"
+			// 	},
+			// }
+
+			queryString := fmt.Sprintf("%s LIKE %s", queryLeftOperandString, queryRightOperandString)
+			db = db.Where(queryString)
 		}
 	default:
-		return db, nodesVisited, errors.New("Invalid query")
+		return db, nodesVisited, errors.New("invalid query")
 	}
 
 	return db, nodesVisited, nil
+}
+
+func buildConcat(root *syntaxtree.Node) string {
+	result := ""
+	if root.Value == "concat" {
+		result = fmt.Sprintf("%s || %s", buildConcat(root.LeftChild), buildConcat(root.RightChild))
+	}
+	if root.Type == syntaxtree.UnaryOperator {
+		result = buildUnaryFuncChain(root)
+	}
+
+	if root.Type == syntaxtree.LeftOperand {
+		result = root.Value
+		if !strings.Contains(result, "'") {
+			result = strcase.SnakeCase(result)
+		}
+	}
+
+	return result
+}
+
+func buildUnaryFuncChain(root *syntaxtree.Node) string {
+	result := ""
+	nodesVisited := map[int]bool{}
+	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
+		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryOperator && !nodesVisited[root.LeftChild.Id] {
+			root = root.LeftChild
+			continue
+		}
+		nodesVisited[root.Id] = true
+		if result == "" {
+			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[root.Value], strcase.SnakeCase(root.LeftChild.Value))
+		} else {
+			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[root.Value], result)
+		}
+
+		if root.Parent != nil {
+			root = root.Parent
+		}
+	}
+
+	return result
 }
