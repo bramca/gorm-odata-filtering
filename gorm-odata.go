@@ -8,17 +8,22 @@ import (
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
 	"github.com/stoewer/go-strcase"
+	deepgorm "github.com/survivorbat/gorm-deep-filtering"
+	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"gorm.io/gorm"
 )
 
 var (
 	operatorTranslation = map[string]string{
-		"eq": "=",
-		"ne": "!=",
-		"lt": "<",
-		"le": "<=",
-		"gt": ">",
-		"ge": ">=",
+		"eq":         "=",
+		"ne":         "!=",
+		"lt":         "<",
+		"le":         "<=",
+		"gt":         ">",
+		"ge":         ">=",
+		"contains":   "~",
+		"startswith": "~",
+		"endswith":   "~",
 	}
 
 	unaryFunctionTranslation = map[string]string{
@@ -191,6 +196,21 @@ func (o *OdataQueryBuilder) PrintTree(query string) (string, error) {
 }
 
 func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, error) {
+	if err := db.Use(deepgorm.New()); err != nil && err != gorm.ErrRegistered {
+		return db, err
+	}
+	config := gormqonvert.CharacterConfig{
+		GreaterThanPrefix:      ">",
+		GreaterOrEqualToPrefix: ">=",
+		LessThanPrefix:         "<",
+		LessOrEqualToPrefix:    "<=",
+		NotEqualToPrefix:       "!=",
+		LikePrefix:             "~",
+		NotLikePrefix:          "!~",
+	}
+	if err := db.Use(gormqonvert.New(config)); err != nil && err != gorm.ErrRegistered {
+		return db, err
+	}
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    o.OperatorPrecedence,
 		OperatorParsers:       o.OperatorParsers,
@@ -244,22 +264,30 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 				queryRightOperandString = rightChild.Value
 			}
 
-			// TODO: if the leftoperand contains an expansion token ('/') then it should create a map according to this format
+			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			// Filters: []map[string]interface {}{
-			// 	map[string]interface {}{
-			// 		"name":[]string{"test"},
-			// 		"metadata":map[string]interface {}{
-			// 			"name":[]string{"test-metadata"}
-			// 		}
-			// 	},
-			// 	map[string]interface {}{
-			// 		"id":"<12"
-			// 	},
-			// }
-
-			queryString := fmt.Sprintf("%s %s %s", queryLeftOperandString, operatorTranslation[root.Value], queryRightOperandString)
-			db = db.Where(queryString)
+			filterMap := map[string]any{}
+			currentMap := filterMap
+			if strings.Contains(leftChild.Value, "/") {
+				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
+				fieldSplit := strings.Split(leftChild.Value, "/")
+				for i, field := range fieldSplit {
+					fieldSnakeCase := strcase.SnakeCase(field)
+					if i < len(fieldSplit)-1 {
+						currentMap[fieldSnakeCase] = map[string]any{}
+						currentMap = currentMap[fieldSnakeCase].(map[string]any)
+						continue
+					}
+					currentMap[fieldSnakeCase] = queryRightOperandString
+					if root.Value != "eq" {
+						currentMap[fieldSnakeCase] = operatorTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
+					}
+				}
+				db = db.Where(filterMap)
+			} else {
+				queryString := fmt.Sprintf("%s %s %s", queryLeftOperandString, operatorTranslation[root.Value], queryRightOperandString)
+				db = db.Where(queryString)
+			}
 		case "contains", "startswith", "endswith":
 			// Build up left child
 			leftChild := root.LeftChild
@@ -277,29 +305,34 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 			// Build up right child
 			queryRightOperandString := root.RightChild.Value
 			rightOperandTranslation := map[string]string{
-				"contains":  `'%$1%'`,
-				"startwith": `'$1%'`,
-				"endswith":  `'%$1'`,
+				"contains":   `'%$1%'`,
+				"startswith": `'$1%'`,
+				"endswith":   `'%$1'`,
 			}
 
 			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
 
-			// TODO: if the leftoperand contains an expansion token ('/') then it should create a map according to this format
+			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			// Filters: []map[string]interface {}{
-			// 	map[string]interface {}{
-			// 		"name":[]string{"test"},
-			// 		"metadata":map[string]interface {}{
-			// 			"name":[]string{"test-metadata"}
-			// 		}
-			// 	},
-			// 	map[string]interface {}{
-			// 		"id":"<12"
-			// 	},
-			// }
-
-			queryString := fmt.Sprintf("%s LIKE %s", queryLeftOperandString, queryRightOperandString)
-			db = db.Where(queryString)
+			filterMap := map[string]any{}
+			currentMap := filterMap
+			if strings.Contains(leftChild.Value, "/") {
+				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
+				fieldSplit := strings.Split(leftChild.Value, "/")
+				for i, field := range fieldSplit {
+					fieldSnakeCase := strcase.SnakeCase(field)
+					if i < len(fieldSplit)-1 {
+						currentMap[fieldSnakeCase] = map[string]any{}
+						currentMap = currentMap[fieldSnakeCase].(map[string]any)
+						continue
+					}
+					currentMap[fieldSnakeCase] = operatorTranslation[root.Value] + queryRightOperandString
+				}
+				db = db.Where(filterMap)
+			} else {
+				queryString := fmt.Sprintf("%s LIKE %s", queryLeftOperandString, queryRightOperandString)
+				db = db.Where(queryString)
+			}
 		}
 	default:
 		return db, errors.New("invalid query")
