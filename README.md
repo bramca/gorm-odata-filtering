@@ -33,7 +33,7 @@ func main() {
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	db.AutoMigrate(&MockModel{})
 
-	odataQueryBuilder := gormodata.NewOdataQueryBuilder(gormodata.PostgreSQL)
+	odataQueryBuilder := gormodata.NewOdataQueryBuilder(gormodata.SQLite)
 
 	queryString := "name eq 'test' and (contains(testValue,'testvalue') or contains(metadata/name,'test-metadata'))"
 
