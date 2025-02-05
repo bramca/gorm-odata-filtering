@@ -2,6 +2,7 @@ package gormodata
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/ing-bank/gormtestutil"
@@ -22,6 +23,62 @@ type MockModel struct {
 type Metadata struct {
 	ID   uuid.UUID
 	Name string
+}
+
+type MockTimeModel struct {
+	Name      string
+	CreatedAt time.Time
+}
+
+func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
+	tests := map[string]struct {
+		queryString string
+		expectedSql string
+		dbType      DbType
+	}{
+		"PostgreSQL": {
+			queryString: "year(createdAt) gt 2025 and time(createdAt) lt '01:12:00'",
+			expectedSql: "SELECT * FROM `mock_time_models` WHERE EXTRACT(YEAR FROM created_at) > 2025 AND CAST(created_at::timestamp AS time) < '01:12:00'",
+			dbType:      PostgreSQL,
+		},
+		"MySQL": {
+			queryString: "year(createdAt) gt 2025 and time(createdAt) lt '01:12:00'",
+			expectedSql: "SELECT * FROM `mock_time_models` WHERE YEAR(created_at) > 2025 AND TIME(created_at) < '01:12:00'",
+			dbType:      MySQL,
+		},
+		"SQLServer": {
+			queryString: "year(createdAt) gt 2025 and time(createdAt) lt '01:12:00'",
+			expectedSql: "SELECT * FROM `mock_time_models` WHERE YEAR(created_at) > 2025 AND TIME(created_at) < '01:12:00'",
+			dbType:      SQLServer,
+		},
+		"SQLite": {
+			queryString: "year(createdAt) gt 2025 and time(createdAt) lt '01:12:00'",
+			expectedSql: "SELECT * FROM `mock_time_models` WHERE YEAR(created_at) > 2025 AND TIME(created_at) < '01:12:00'",
+			dbType:      SQLite,
+		},
+	}
+	for name, testData := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+			_ = db.AutoMigrate(&MockTimeModel{})
+
+			odataFilter := NewOdataQueryBuilder(testData.dbType)
+
+			// Act
+			var dbQuery *gorm.DB
+			var err error
+			sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+				dbQuery, err = odataFilter.BuildQuery(testData.queryString, tx)
+				return dbQuery.Find(&MockTimeModel{})
+			})
+
+			// Assert
+			assert.NoError(t, err)
+			assert.NotNil(t, dbQuery)
+			assert.Equal(t, testData.expectedSql, sqlQuery)
+		})
+	}
 }
 
 func Test_BuildQuery_Success(t *testing.T) {
@@ -179,7 +236,7 @@ func Test_BuildQuery_Success(t *testing.T) {
 			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 			db.CreateInBatches(testData.records, len(testData.records))
 
-			odataFilter := NewOdataQueryBuilder()
+			odataFilter := NewOdataQueryBuilder(SQLite)
 
 			// Act
 			var dbQuery *gorm.DB
@@ -279,7 +336,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 
 	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/name,'test-3'))"
 
-	odataQueryBuilder := NewOdataQueryBuilder()
+	odataQueryBuilder := NewOdataQueryBuilder(SQLite)
 
 	// Act
 	var dbQuery *gorm.DB
@@ -306,7 +363,7 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	query := "length(name"
 
-	odataFilter := NewOdataQueryBuilder()
+	odataFilter := NewOdataQueryBuilder(SQLite)
 
 	// Act
 	_, err := odataFilter.BuildQuery(query, db)
@@ -321,7 +378,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	query := "length(name)"
 
-	odataFilter := NewOdataQueryBuilder()
+	odataFilter := NewOdataQueryBuilder(SQLite)
 
 	// Act
 	_, err := odataFilter.BuildQuery(query, db)
@@ -334,7 +391,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 func Test_PrintTree_Success(t *testing.T) {
 	// Arrange
 	queryString := "name eq 'test' and testValue eq 'testvalue'"
-	odataFilter := NewOdataQueryBuilder()
+	odataFilter := NewOdataQueryBuilder(SQLite)
 
 	// Act
 	tree, err := odataFilter.PrintTree(queryString)
@@ -347,7 +404,7 @@ func Test_PrintTree_Success(t *testing.T) {
 func Test_PrintTree_Error(t *testing.T) {
 	// Arrange
 	queryString := "name eq 'test' and (testValue eq 'testvalue' or testValue eq 'accvalue'"
-	odataFilter := NewOdataQueryBuilder()
+	odataFilter := NewOdataQueryBuilder(SQLite)
 
 	// Act
 	_, err := odataFilter.PrintTree(queryString)

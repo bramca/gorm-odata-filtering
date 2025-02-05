@@ -13,6 +13,15 @@ import (
 	"gorm.io/gorm"
 )
 
+type DbType int
+
+const (
+	PostgreSQL DbType = iota
+	MySQL
+	SQLite
+	SQLServer
+)
+
 var (
 	operatorTranslation = map[string]string{
 		"eq":         "=",
@@ -26,37 +35,102 @@ var (
 		"endswith":   "~",
 	}
 
-	unaryFunctionTranslation = map[string]string{
-		"length":           "LENGTH",
-		"indexof":          "LOCATE",
-		"tolower":          "LOWER",
-		"toupper":          "UPPER",
-		"trim":             "TRIM",
-		"year":             "YEAR",
-		"month":            "MONTH",
-		"day":              "DAY",
-		"hour":             "HOUR",
-		"minute":           "MINUTE",
-		"second":           "SECOND",
-		"fractionalsecond": "MICROSECOND",
-		"date":             "DATE",
-		"time":             "TIME",
-		"now":              "NOW",
-		"round":            "ROUND",
-		"floor":            "FLOOR",
-		"ceiling":          "CEIL",
+	unaryFunctionTranslation = map[DbType]map[string]string{
+		PostgreSQL: {
+			"length":           "LENGTH",
+			"indexof":          "POSITION",
+			"tolower":          "LOWER",
+			"toupper":          "UPPER",
+			"trim":             "TRIM",
+			"year":             "EXTRACT(YEAR FROM %s)",
+			"month":            "EXTRACT(MONTH FROM %s)",
+			"day":              "EXTRACT(DAY FROM %s)",
+			"hour":             "EXTRACT(HOUR FROM %s)",
+			"minute":           "EXTRACT(MINUTE FROM %s)",
+			"second":           "EXTRACT(SECOND FROM %s)",
+			"fractionalsecond": "EXTRACT(MICROSECOND FROM %s)",
+			"date":             "TO_DATE",
+			"time":             "CAST(%s::timestamp AS time)",
+			"now":              "NOW",
+			"round":            "ROUND",
+			"floor":            "FLOOR",
+			"ceiling":          "CEIL",
+		},
+		MySQL: {
+			"length":           "LENGTH",
+			"indexof":          "LOCATE",
+			"tolower":          "LOWER",
+			"toupper":          "UPPER",
+			"trim":             "TRIM",
+			"year":             "YEAR",
+			"month":            "MONTH",
+			"day":              "DAY",
+			"hour":             "HOUR",
+			"minute":           "MINUTE",
+			"second":           "SECOND",
+			"fractionalsecond": "MICROSECOND",
+			"date":             "DATE",
+			"time":             "TIME",
+			"now":              "NOW",
+			"round":            "ROUND",
+			"floor":            "FLOOR",
+			"ceiling":          "CEIL",
+		},
+		SQLite: {
+			"length":           "LENGTH",
+			"indexof":          "LOCATE",
+			"tolower":          "LOWER",
+			"toupper":          "UPPER",
+			"trim":             "TRIM",
+			"year":             "YEAR",
+			"month":            "MONTH",
+			"day":              "DAY",
+			"hour":             "HOUR",
+			"minute":           "MINUTE",
+			"second":           "SECOND",
+			"fractionalsecond": "MICROSECOND",
+			"date":             "DATE",
+			"time":             "TIME",
+			"now":              "NOW",
+			"round":            "ROUND",
+			"floor":            "FLOOR",
+			"ceiling":          "CEIL",
+		},
+		SQLServer: {
+			"length":           "LENGTH",
+			"indexof":          "LOCATE",
+			"tolower":          "LOWER",
+			"toupper":          "UPPER",
+			"trim":             "TRIM",
+			"year":             "YEAR",
+			"month":            "MONTH",
+			"day":              "DAY",
+			"hour":             "HOUR",
+			"minute":           "MINUTE",
+			"second":           "SECOND",
+			"fractionalsecond": "MICROSECOND",
+			"date":             "DATE",
+			"time":             "TIME",
+			"now":              "NOW",
+			"round":            "ROUND",
+			"floor":            "FLOOR",
+			"ceiling":          "CEIL",
+		},
 	}
 )
 
 type OdataQueryBuilder struct {
+	DatabaseType       DbType
 	OperatorPrecedence []string
 	OperatorParsers    []syntaxtree.OperatorParser
 	BinaryFunctions    []syntaxtree.BinaryFunctionParser
 	UnaryFunctions     []syntaxtree.UnaryFunctionParser
 }
 
-func NewOdataQueryBuilder() *OdataQueryBuilder {
-	o := &OdataQueryBuilder{}
+func NewOdataQueryBuilder(databaseType DbType) *OdataQueryBuilder {
+	o := &OdataQueryBuilder{
+		DatabaseType: databaseType,
+	}
 	o.OperatorPrecedence = []string{
 		"length",
 		"indexof",
@@ -224,28 +298,28 @@ func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, err
 		return db, err
 	}
 
-	db, err = buildGormQuery(tree.Root, db)
+	db, err = buildGormQuery(tree.Root, db, o.DatabaseType)
 
 	return db, err
 }
 
-func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
+func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
 	switch root.Type {
 	case syntaxtree.Operator:
 		switch root.Value {
 		case "and":
-			db = db.Where(buildGormQuery(root.LeftChild, db)).Where(buildGormQuery(root.RightChild, db))
+			db = db.Where(buildGormQuery(root.LeftChild, db, databaseType)).Where(buildGormQuery(root.RightChild, db, databaseType))
 		case "or":
-			db = db.Where(buildGormQuery(root.LeftChild, db)).Or(buildGormQuery(root.RightChild, db))
+			db = db.Where(buildGormQuery(root.LeftChild, db, databaseType)).Or(buildGormQuery(root.RightChild, db, databaseType))
 		case "eq", "ne", "lt", "le", "gt", "ge":
 			// Build up left child
 			leftChild := root.LeftChild
 			queryLeftOperandString := ""
 			if leftChild.Type == syntaxtree.UnaryOperator {
-				queryLeftOperandString = buildUnaryFuncChain(leftChild)
+				queryLeftOperandString = buildUnaryFuncChain(databaseType, leftChild)
 			}
 			if leftChild.Value == "concat" {
-				queryLeftOperandString = buildConcat(leftChild)
+				queryLeftOperandString = buildConcat(databaseType, leftChild)
 			}
 			if leftChild.Type == syntaxtree.LeftOperand {
 				queryLeftOperandString = strcase.SnakeCase(leftChild.Value)
@@ -255,10 +329,10 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 			rightChild := root.RightChild
 			queryRightOperandString := ""
 			if rightChild.Type == syntaxtree.UnaryOperator {
-				queryRightOperandString = buildUnaryFuncChain(rightChild)
+				queryRightOperandString = buildUnaryFuncChain(databaseType, rightChild)
 			}
 			if rightChild.Value == "concat" {
-				queryRightOperandString = buildConcat(rightChild)
+				queryRightOperandString = buildConcat(databaseType, rightChild)
 			}
 			if rightChild.Type == syntaxtree.RightOperand {
 				queryRightOperandString = rightChild.Value
@@ -293,10 +367,10 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 			leftChild := root.LeftChild
 			queryLeftOperandString := ""
 			if leftChild.Type == syntaxtree.UnaryOperator {
-				queryLeftOperandString = buildUnaryFuncChain(leftChild)
+				queryLeftOperandString = buildUnaryFuncChain(databaseType, leftChild)
 			}
 			if leftChild.Value == "concat" {
-				queryLeftOperandString = buildConcat(leftChild)
+				queryLeftOperandString = buildConcat(databaseType, leftChild)
 			}
 			if leftChild.Type == syntaxtree.LeftOperand {
 				queryLeftOperandString = strcase.SnakeCase(leftChild.Value)
@@ -341,13 +415,13 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB) (*gorm.DB, error) {
 	return db, nil
 }
 
-func buildConcat(root *syntaxtree.Node) string {
+func buildConcat(databaseType DbType, root *syntaxtree.Node) string {
 	result := ""
 	if root.Value == "concat" {
-		result = fmt.Sprintf("%s || %s", buildConcat(root.LeftChild), buildConcat(root.RightChild))
+		result = fmt.Sprintf("%s || %s", buildConcat(databaseType, root.LeftChild), buildConcat(databaseType, root.RightChild))
 	}
 	if root.Type == syntaxtree.UnaryOperator {
-		result = buildUnaryFuncChain(root)
+		result = buildUnaryFuncChain(databaseType, root)
 	}
 
 	if root.Type == syntaxtree.LeftOperand {
@@ -360,7 +434,7 @@ func buildConcat(root *syntaxtree.Node) string {
 	return result
 }
 
-func buildUnaryFuncChain(root *syntaxtree.Node) string {
+func buildUnaryFuncChain(databaseType DbType, root *syntaxtree.Node) string {
 	result := ""
 	nodesVisited := map[int]bool{}
 	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
@@ -370,9 +444,13 @@ func buildUnaryFuncChain(root *syntaxtree.Node) string {
 		}
 		nodesVisited[root.Id] = true
 		if result == "" {
-			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[root.Value], strcase.SnakeCase(root.LeftChild.Value))
+			if strings.Contains(unaryFunctionTranslation[databaseType][root.Value], "%") {
+				result = fmt.Sprintf(unaryFunctionTranslation[databaseType][root.Value], strcase.SnakeCase(root.LeftChild.Value))
+			} else {
+				result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], strcase.SnakeCase(root.LeftChild.Value))
+			}
 		} else {
-			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[root.Value], result)
+			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], result)
 		}
 
 		if root.Parent != nil {
