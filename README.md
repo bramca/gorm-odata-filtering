@@ -7,6 +7,8 @@
 This package provides a way to filter [gorm](https://gorm.io) objects with an [OData](https://docs.oasis-open.org/odata/odata/v4.0/errata03/os/complete/part2-url-conventions/odata-v4.0-errata03-os-part2-url-conventions-complete.html#_Toc453752358) filter.
 It builds the correct gorm query based on an odata filter string.
 <br>
+It creates a `Syntax Tree` using [go-syntax-tree](https://github.com/bramca/go-syntax-tree) based on the input query string and uses that tree to build the correct gorm query.
+<br>
 To make sure that object expansion works (e.g. `metadata/name eq 'some-value'`) it makes use of the following 2 dependencies:
 - [deepgorm](github.com/survivorbat/gorm-deep-filtering)
 - [gormqonvert](github.com/survivorbat/gorm-query-convert)
