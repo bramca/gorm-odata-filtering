@@ -27,6 +27,13 @@ type MockModel struct {
 	ID        string
 	Name      string
 	TestValue string
+	Metadata   *Metadata `gorm:"foreignKey:MetadataID"`
+	MetadataID *uuid.UUID
+}
+
+type Metadata struct {
+	ID   uuid.UUID
+	Name string
 }
 
 func main() {
