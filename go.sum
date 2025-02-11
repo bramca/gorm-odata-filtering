@@ -1,7 +1,7 @@
 github.com/bramca/go-syntax-tree v0.0.0-20250204131038-4747ebb26147 h1:nnN4pkY/UYK+iAzSDigNsLA+vIPMBeM9H3SZhA8ftsc=
 github.com/bramca/go-syntax-tree v0.0.0-20250204131038-4747ebb26147/go.mod h1:ZMqVOe5egZ6pZfdChseqarq9CufmfXXKhckvCaeZTis=
-github.com/bramca/gorm-deep-filtering v0.0.0-20250205104830-3f7100f90189 h1:5M1GoUsqaW+GW8vlksI8zHLDaYWuEkjXFDSCY3bJy8E=
-github.com/bramca/gorm-deep-filtering v0.0.0-20250205104830-3f7100f90189/go.mod h1:Z+jO8UGU+h+Vf7woIndjoBGs+01xaxRMU9yVUycPB8M=
+github.com/bramca/gorm-deep-filtering v0.0.0-20250210150647-382fc4d33255 h1:C7pYWYpcfWuxv6VV7XLHV7QJXYotl2OiN0X5gLBC0qM=
+github.com/bramca/gorm-deep-filtering v0.0.0-20250210150647-382fc4d33255/go.mod h1:Z+jO8UGU+h+Vf7woIndjoBGs+01xaxRMU9yVUycPB8M=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

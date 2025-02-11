@@ -332,7 +332,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	db.CreateInBatches(mockModelRecords, len(mockModelRecords))
-	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE name LIKE \"test-3%\"))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `metadata`.`name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name LIKE \"test-3%\"))"
 
 	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/name,'test-3'))"
 

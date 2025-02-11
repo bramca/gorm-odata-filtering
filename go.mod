@@ -2,7 +2,7 @@ module github.com/bramca/gorm-odata-filtering
 
 go 1.23.5
 
-replace github.com/survivorbat/gorm-deep-filtering v0.1.1 => github.com/bramca/gorm-deep-filtering v0.0.0-20250205104830-3f7100f90189
+replace github.com/survivorbat/gorm-deep-filtering v0.1.1 => github.com/bramca/gorm-deep-filtering v0.0.0-20250210150647-382fc4d33255
 
 require (
 	github.com/bramca/go-syntax-tree v0.0.0-20250204131038-4747ebb26147

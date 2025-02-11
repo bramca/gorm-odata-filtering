@@ -304,13 +304,14 @@ func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, err
 }
 
 func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
+	cleanDB := db.Session(&gorm.Session{NewDB: true})
 	switch root.Type {
 	case syntaxtree.Operator:
 		switch root.Value {
 		case "and":
-			db = db.Where(buildGormQuery(root.LeftChild, db, databaseType)).Where(buildGormQuery(root.RightChild, db, databaseType))
+			db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType))
 		case "or":
-			db = db.Where(buildGormQuery(root.LeftChild, db, databaseType)).Or(buildGormQuery(root.RightChild, db, databaseType))
+			db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType))
 		case "eq", "ne", "lt", "le", "gt", "ge":
 			// Build up left child
 			leftChild := root.LeftChild
