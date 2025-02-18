@@ -40,7 +40,7 @@ type Metadata struct {
 
 func main() {
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-	db.AutoMigrate(&MockModel{})
+	db.AutoMigrate(&MockModel{}, &Metadata{})
 
 	odataQueryBuilder := gormodata.NewOdataQueryBuilder(gormodata.SQLite)
 
