@@ -2,10 +2,10 @@ module github.com/bramca/gorm-odata-filtering
 
 go 1.23.5
 
-replace github.com/survivorbat/gorm-deep-filtering v0.1.1 => github.com/bramca/gorm-deep-filtering v0.0.0-20250210150647-382fc4d33255
+replace github.com/survivorbat/gorm-deep-filtering v0.1.1 => github.com/bramca/gorm-deep-filtering v0.0.0-20250214095044-4d2256a5a069
 
 require (
-	github.com/bramca/go-syntax-tree v0.0.0-20250204131038-4747ebb26147
+	github.com/bramca/go-syntax-tree v0.0.1
 	github.com/google/uuid v1.6.0
 	github.com/ing-bank/gormtestutil v0.0.1
 	github.com/stoewer/go-strcase v1.3.0
