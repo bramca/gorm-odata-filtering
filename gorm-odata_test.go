@@ -63,13 +63,11 @@ func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 			_ = db.AutoMigrate(&MockTimeModel{})
 
-			odataFilter := NewOdataQueryBuilder(testData.dbType)
-
 			// Act
 			var dbQuery *gorm.DB
 			var err error
 			sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
-				dbQuery, err = odataFilter.BuildQuery(testData.queryString, tx)
+				dbQuery, err = BuildQuery(testData.queryString, tx, testData.dbType)
 				return dbQuery.Find(&MockTimeModel{})
 			})
 
@@ -236,18 +234,16 @@ func Test_BuildQuery_Success(t *testing.T) {
 			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 			db.CreateInBatches(testData.records, len(testData.records))
 
-			odataFilter := NewOdataQueryBuilder(SQLite)
-
 			// Act
 			var dbQuery *gorm.DB
 			var err error
 			var result []MockModel
 			sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
-				dbQuery, err = odataFilter.BuildQuery(testData.queryString, tx)
+				dbQuery, err = BuildQuery(testData.queryString, tx, SQLite)
 				return dbQuery.Find(&MockModel{})
 			})
 
-			dbQuery, err = odataFilter.BuildQuery(testData.queryString, db)
+			dbQuery, err = BuildQuery(testData.queryString, db, SQLite)
 
 			queryResult := dbQuery.Find(&result)
 
@@ -336,17 +332,15 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 
 	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/name,'test-3'))"
 
-	odataQueryBuilder := NewOdataQueryBuilder(SQLite)
-
 	// Act
 	var dbQuery *gorm.DB
 	var err error
 	var result []MockModel
 	sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
-		dbQuery, err = odataQueryBuilder.BuildQuery(queryString, tx)
+		dbQuery, err = BuildQuery(queryString, tx, SQLite)
 		return dbQuery.Find(&MockModel{})
 	})
-	dbQuery, err = odataQueryBuilder.BuildQuery(queryString, db)
+	dbQuery, err = BuildQuery(queryString, db, SQLite)
 	queryResult := dbQuery.Find(&result)
 
 	// Assert
@@ -363,10 +357,8 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	query := "length(name"
 
-	odataFilter := NewOdataQueryBuilder(SQLite)
-
 	// Act
-	_, err := odataFilter.BuildQuery(query, db)
+	_, err := BuildQuery(query, db, SQLite)
 
 	// Assert
 	assert.Error(t, err)
@@ -378,10 +370,8 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	query := "length(name)"
 
-	odataFilter := NewOdataQueryBuilder(SQLite)
-
 	// Act
-	_, err := odataFilter.BuildQuery(query, db)
+	_, err := BuildQuery(query, db, SQLite)
 
 	// Assert
 	assert.Error(t, err)
@@ -391,10 +381,9 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 func Test_PrintTree_Success(t *testing.T) {
 	// Arrange
 	queryString := "name eq 'test' and testValue eq 'testvalue'"
-	odataFilter := NewOdataQueryBuilder(SQLite)
 
 	// Act
-	tree, err := odataFilter.PrintTree(queryString)
+	tree, err := PrintTree(queryString)
 
 	// Assert
 	assert.NoError(t, err)
@@ -404,10 +393,9 @@ func Test_PrintTree_Success(t *testing.T) {
 func Test_PrintTree_Error(t *testing.T) {
 	// Arrange
 	queryString := "name eq 'test' and (testValue eq 'testvalue' or testValue eq 'accvalue'"
-	odataFilter := NewOdataQueryBuilder(SQLite)
 
 	// Act
-	_, err := odataFilter.PrintTree(queryString)
+	_, err := PrintTree(queryString)
 
 	// Assert
 	assert.Error(t, err)

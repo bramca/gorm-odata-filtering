@@ -117,21 +117,8 @@ var (
 			"ceiling":          "CEIL",
 		},
 	}
-)
 
-type OdataQueryBuilder struct {
-	DatabaseType       DbType
-	OperatorPrecedence []string
-	OperatorParsers    []syntaxtree.OperatorParser
-	BinaryFunctions    []syntaxtree.BinaryFunctionParser
-	UnaryFunctions     []syntaxtree.UnaryFunctionParser
-}
-
-func NewOdataQueryBuilder(databaseType DbType) *OdataQueryBuilder {
-	o := &OdataQueryBuilder{
-		DatabaseType: databaseType,
-	}
-	o.OperatorPrecedence = []string{
+	operatorPrecedence = []string{
 		"length",
 		"indexof",
 		"tolower",
@@ -163,8 +150,7 @@ func NewOdataQueryBuilder(databaseType DbType) *OdataQueryBuilder {
 		"and",
 		"or",
 	}
-
-	o.OperatorParsers = []syntaxtree.OperatorParser{
+	operatorParsers = []syntaxtree.OperatorParser{
 		{
 			OperatorString:  "eq",
 			OperatorPattern: regexp.MustCompile(`(.*?) eq (.*?)`),
@@ -199,65 +185,133 @@ func NewOdataQueryBuilder(databaseType DbType) *OdataQueryBuilder {
 		},
 	}
 
-	binaryFunctions := []string{
-		"concat",
-		"contains",
-		"endswith",
-		"startswith",
-	}
-
-	binaryFunctionParsers := make([]syntaxtree.BinaryFunctionParser, len(binaryFunctions))
-	for i, binaryFunction := range binaryFunctions {
-		binaryFunctionParsers[i] = syntaxtree.BinaryFunctionParser{
-			FunctionName:     binaryFunction,
+	binaryFunctionParsers = []syntaxtree.BinaryFunctionParser{
+		{
+			FunctionName:     "concat",
 			OpeningDelimiter: '(',
 			ClosingDelimiter: ')',
 			OperandSeparator: ',',
-		}
-	}
-	o.BinaryFunctions = binaryFunctionParsers
-
-	unaryFunctions := []string{
-		"length",
-		"indexof",
-		"tolower",
-		"toupper",
-		"trim",
-		"year",
-		"month",
-		"day",
-		"hour",
-		"minute",
-		"second",
-		"fractionalsecond",
-		"date",
-		"time",
-		"now",
-		"round",
-		"floor",
-		"ceiling",
-	}
-
-	unaryFunctionParsers := make([]syntaxtree.UnaryFunctionParser, len(unaryFunctions))
-	for i, unaryFunction := range unaryFunctions {
-		unaryFunctionParsers[i] = syntaxtree.UnaryFunctionParser{
-			FunctionName:     unaryFunction,
+		},
+		{
+			FunctionName:     "contains",
 			OpeningDelimiter: '(',
 			ClosingDelimiter: ')',
-		}
+			OperandSeparator: ',',
+		},
+		{
+			FunctionName:     "endswith",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+			OperandSeparator: ',',
+		},
+		{
+			FunctionName:     "startswith",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+			OperandSeparator: ',',
+		},
 	}
 
-	o.UnaryFunctions = unaryFunctionParsers
+	unaryFunctionParsers = []syntaxtree.UnaryFunctionParser{
+		{
+			FunctionName:     "length",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "indexof",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "tolower",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "toupper",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "trim",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "year",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "month",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "day",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "hour",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "minute",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "second",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "fractionalsecond",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "date",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "time",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "now",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "round",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "floor",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+		{
+			FunctionName:     "ceiling",
+			OpeningDelimiter: '(',
+			ClosingDelimiter: ')',
+		},
+	}
+)
 
-	return o
-}
-
-func (o *OdataQueryBuilder) PrintTree(query string) (string, error) {
+func PrintTree(query string) (string, error) {
 	tree := syntaxtree.SyntaxTree{
-		OperatorPrecedence:    o.OperatorPrecedence,
-		OperatorParsers:       o.OperatorParsers,
-		BinaryFunctionParsers: o.BinaryFunctions,
-		UnaryFunctionParsers:  o.UnaryFunctions,
+		OperatorPrecedence:    operatorPrecedence,
+		OperatorParsers:       operatorParsers,
+		BinaryFunctionParsers: binaryFunctionParsers,
+		UnaryFunctionParsers:  unaryFunctionParsers,
 		Separator:             ";",
 	}
 
@@ -269,7 +323,7 @@ func (o *OdataQueryBuilder) PrintTree(query string) (string, error) {
 	return tree.String(), nil
 }
 
-func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, error) {
+func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
 	if err := db.Use(deepgorm.New()); err != nil && err != gorm.ErrRegistered {
 		return db, err
 	}
@@ -286,10 +340,10 @@ func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, err
 		return db, err
 	}
 	tree := syntaxtree.SyntaxTree{
-		OperatorPrecedence:    o.OperatorPrecedence,
-		OperatorParsers:       o.OperatorParsers,
-		BinaryFunctionParsers: o.BinaryFunctions,
-		UnaryFunctionParsers:  o.UnaryFunctions,
+		OperatorPrecedence:    operatorPrecedence,
+		OperatorParsers:       operatorParsers,
+		BinaryFunctionParsers: binaryFunctionParsers,
+		UnaryFunctionParsers:  unaryFunctionParsers,
 		Separator:             ";",
 	}
 
@@ -298,7 +352,7 @@ func (o *OdataQueryBuilder) BuildQuery(query string, db *gorm.DB) (*gorm.DB, err
 		return db, err
 	}
 
-	db, err = buildGormQuery(tree.Root, db, o.DatabaseType)
+	db, err = buildGormQuery(tree.Root, db, databaseType)
 
 	return db, err
 }
