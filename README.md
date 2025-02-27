@@ -42,12 +42,10 @@ func main() {
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	db.AutoMigrate(&MockModel{}, &Metadata{})
 
-	odataQueryBuilder := gormodata.NewOdataQueryBuilder(gormodata.SQLite)
-
 	queryString := "name eq 'test' and (contains(testValue,'testvalue') or contains(metadata/name,'test-metadata'))"
 
 	var result []MockModel
-	dbQuery, err := odataQueryBuilder.BuildQuery(queryString, db)
+	dbQuery, err := gormodata.BuildQuery(queryString, db, gormodata.SQLite)
 
 	if err != nil {
 		panic(err)
