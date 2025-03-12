@@ -21,8 +21,15 @@ type MockModel struct {
 }
 
 type Metadata struct {
-	ID   uuid.UUID
-	Name string
+	ID    uuid.UUID
+	Name  string
+	Tag   *Tag `gorm:"foreignKey:TagID"`
+	TagID *uuid.UUID
+}
+
+type Tag struct {
+	ID    uuid.UUID
+	Value string
 }
 
 type MockTimeModel struct {
@@ -268,6 +275,10 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 			Metadata: &Metadata{
 				ID:   uuid.MustParse("1ea3cf2f-5c1f-47c6-b0c3-78f0cee2007b"),
 				Name: "test-1-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("93e75a82-1120-4a21-9995-b057c6b7a517"),
+					Value: "test-1-value",
+				},
 			},
 		},
 		{
@@ -278,6 +289,10 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 			Metadata: &Metadata{
 				ID:   uuid.MustParse("6afa4aef-a646-415b-ae2d-1ab7fc554c08"),
 				Name: "prd-1-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("8dc750d5-9121-4269-be18-fe8f7b7fffb7"),
+					Value: "prd-1-value",
+				},
 			},
 		},
 		{
@@ -288,6 +303,10 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 			Metadata: &Metadata{
 				ID:   uuid.MustParse("200c2712-cafc-4f00-b6e1-0ff89871f1cd"),
 				Name: "test-2-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("605f54df-7983-470e-bc27-41dd9c7c14d8"),
+					Value: "test-2-value",
+				},
 			},
 		},
 		{
@@ -298,6 +317,10 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 			Metadata: &Metadata{
 				ID:   uuid.MustParse("93ce3788-9e09-462a-a219-12373675d7e8"),
 				Name: "test-3-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("911bd72a-09f3-425f-942b-1df1cf0220e6"),
+					Value: "test-3-value",
+				},
 			},
 		},
 		{
@@ -308,6 +331,10 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 			Metadata: &Metadata{
 				ID:   uuid.MustParse("d96c6f36-9dc9-4a07-a83b-11b62d8ff7db"),
 				Name: "test-4-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("83fc9b56-9e32-4a1a-876d-70d4605753c7"),
+					Value: "test-4-value",
+				},
 			},
 		},
 	}
@@ -328,9 +355,9 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	db.CreateInBatches(mockModelRecords, len(mockModelRecords))
-	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `metadata`.`name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name LIKE \"test-3%\"))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `metadata`.`name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE tags.value LIKE \"test-3%\")))"
 
-	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/name,'test-3'))"
+	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/tag/value,'test-3'))"
 
 	// Act
 	var dbQuery *gorm.DB
