@@ -9,6 +9,7 @@ import (
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
 	"github.com/stoewer/go-strcase"
+	"github.com/survivorbat/go-tsyncmap"
 	deepgorm "github.com/survivorbat/gorm-deep-filtering"
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"gorm.io/gorm"
@@ -24,7 +25,8 @@ const (
 )
 
 var (
-	operatorTranslation = map[string]string{
+	cacheOperatorTranslationMap = tsyncmap.Map[string, map[string]string]{}
+	operatorTranslation         = map[string]string{
 		"eq":         "=",
 		"ne":         "!=",
 		"lt":         "<",
@@ -331,17 +333,21 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error
 		}
 	}
 	if _, ok := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]; ok {
-		// TODO: Maybe look into caching this to not do these reflect calls on each method call
-		plugin := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
-		pluginConfig := reflect.ValueOf(plugin).Elem().FieldByName("config")
-		operatorTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
-		operatorTranslation["ge"] = pluginConfig.FieldByName("GreaterOrEqualToPrefix").String()
-		operatorTranslation["lt"] = pluginConfig.FieldByName("LessThanPrefix").String()
-		operatorTranslation["le"] = pluginConfig.FieldByName("LessOrEqualToPrefix").String()
-		operatorTranslation["ne"] = pluginConfig.FieldByName("NotEqualToPrefix").String()
-		operatorTranslation["contains"] = pluginConfig.FieldByName("LikePrefix").String()
-		operatorTranslation["startswith"] = pluginConfig.FieldByName("LikePrefix").String()
-		operatorTranslation["endswith"] = pluginConfig.FieldByName("LikePrefix").String()
+		if operatorTranslationMap, cacheOk := cacheOperatorTranslationMap.Load("operatorTranslation"); !cacheOk {
+			plugin := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
+			pluginConfig := reflect.ValueOf(plugin).Elem().FieldByName("config")
+			operatorTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
+			operatorTranslation["ge"] = pluginConfig.FieldByName("GreaterOrEqualToPrefix").String()
+			operatorTranslation["lt"] = pluginConfig.FieldByName("LessThanPrefix").String()
+			operatorTranslation["le"] = pluginConfig.FieldByName("LessOrEqualToPrefix").String()
+			operatorTranslation["ne"] = pluginConfig.FieldByName("NotEqualToPrefix").String()
+			operatorTranslation["contains"] = pluginConfig.FieldByName("LikePrefix").String()
+			operatorTranslation["startswith"] = pluginConfig.FieldByName("LikePrefix").String()
+			operatorTranslation["endswith"] = pluginConfig.FieldByName("LikePrefix").String()
+			cacheOperatorTranslationMap.Store("operatorTranslation", operatorTranslation)
+		} else {
+			operatorTranslation = operatorTranslationMap
+		}
 	} else {
 		config := gormqonvert.CharacterConfig{
 			GreaterThanPrefix:      operatorTranslation["gt"],

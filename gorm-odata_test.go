@@ -40,6 +40,8 @@ type MockTimeModel struct {
 
 func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	tests := map[string]struct {
 		queryString string
 		expectedSql string
@@ -90,6 +92,8 @@ func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 
 func Test_BuildQuery_Success(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	tests := map[string]struct {
 		records        []*MockModel
 		queryString    string
@@ -269,6 +273,8 @@ func Test_BuildQuery_Success(t *testing.T) {
 
 func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	// Arrange
 	records := []*MockModel{
 		{
@@ -349,6 +355,8 @@ func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
 
 func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	// Arrange
 	mockModelRecords := []*MockModel{
 		{
@@ -464,6 +472,8 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 
 func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	// Arrange
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
@@ -478,6 +488,8 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 
 func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	// Arrange
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
@@ -493,6 +505,8 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 
 func Test_PrintTree_Success(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	// Arrange
 	queryString := "name eq 'test' and testValue eq 'testvalue'"
 
@@ -506,6 +520,8 @@ func Test_PrintTree_Success(t *testing.T) {
 
 func Test_PrintTree_Error(t *testing.T) {
 	t.Parallel()
+	t.Cleanup(cleanupCache)
+
 	// Arrange
 	queryString := "name eq 'test' and (testValue eq 'testvalue' or testValue eq 'accvalue'"
 
@@ -514,4 +530,8 @@ func Test_PrintTree_Error(t *testing.T) {
 
 	// Assert
 	assert.Error(t, err)
+}
+
+func cleanupCache() {
+	cacheOperatorTranslationMap.Clear()
 }
