@@ -25,8 +25,20 @@ const (
 )
 
 var (
-	cacheOperatorTranslationMap = tsyncmap.Map[string, map[string]string]{}
-	operatorTranslation         = map[string]string{
+	cacheGormqonvertTranslationMap = tsyncmap.Map[string, map[string]string]{}
+	operatorTranslation            = map[string]string{
+		"eq":         "=",
+		"ne":         "!=",
+		"lt":         "<",
+		"le":         "<=",
+		"gt":         ">",
+		"ge":         ">=",
+		"contains":   "~",
+		"startswith": "~",
+		"endswith":   "~",
+	}
+
+	gormqonvertTranslation = map[string]string{
 		"eq":         "=",
 		"ne":         "!=",
 		"lt":         "<",
@@ -333,34 +345,35 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error
 		}
 	}
 	if _, ok := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]; ok {
-		if operatorTranslationMap, cacheOk := cacheOperatorTranslationMap.Load("operatorTranslation"); !cacheOk {
+		if gormqonvertTranslationMap, cacheOk := cacheGormqonvertTranslationMap.Load("gormqonvertTranslation"); !cacheOk {
 			plugin := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
 			pluginConfig := reflect.ValueOf(plugin).Elem().FieldByName("config")
-			operatorTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
-			operatorTranslation["ge"] = pluginConfig.FieldByName("GreaterOrEqualToPrefix").String()
-			operatorTranslation["lt"] = pluginConfig.FieldByName("LessThanPrefix").String()
-			operatorTranslation["le"] = pluginConfig.FieldByName("LessOrEqualToPrefix").String()
-			operatorTranslation["ne"] = pluginConfig.FieldByName("NotEqualToPrefix").String()
-			operatorTranslation["contains"] = pluginConfig.FieldByName("LikePrefix").String()
-			operatorTranslation["startswith"] = pluginConfig.FieldByName("LikePrefix").String()
-			operatorTranslation["endswith"] = pluginConfig.FieldByName("LikePrefix").String()
-			cacheOperatorTranslationMap.Store("operatorTranslation", operatorTranslation)
+			gormqonvertTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
+			gormqonvertTranslation["ge"] = pluginConfig.FieldByName("GreaterOrEqualToPrefix").String()
+			gormqonvertTranslation["lt"] = pluginConfig.FieldByName("LessThanPrefix").String()
+			gormqonvertTranslation["le"] = pluginConfig.FieldByName("LessOrEqualToPrefix").String()
+			gormqonvertTranslation["ne"] = pluginConfig.FieldByName("NotEqualToPrefix").String()
+			gormqonvertTranslation["contains"] = pluginConfig.FieldByName("LikePrefix").String()
+			gormqonvertTranslation["startswith"] = pluginConfig.FieldByName("LikePrefix").String()
+			gormqonvertTranslation["endswith"] = pluginConfig.FieldByName("LikePrefix").String()
+			cacheGormqonvertTranslationMap.Store("gormqonvertTranslation", gormqonvertTranslation)
 		} else {
-			operatorTranslation = operatorTranslationMap
+			gormqonvertTranslation = gormqonvertTranslationMap
 		}
 	} else {
 		config := gormqonvert.CharacterConfig{
-			GreaterThanPrefix:      operatorTranslation["gt"],
-			GreaterOrEqualToPrefix: operatorTranslation["ge"],
-			LessThanPrefix:         operatorTranslation["lt"],
-			LessOrEqualToPrefix:    operatorTranslation["le"],
-			NotEqualToPrefix:       operatorTranslation["ne"],
-			LikePrefix:             operatorTranslation["contains"],
+			GreaterThanPrefix:      gormqonvertTranslation["gt"],
+			GreaterOrEqualToPrefix: gormqonvertTranslation["ge"],
+			LessThanPrefix:         gormqonvertTranslation["lt"],
+			LessOrEqualToPrefix:    gormqonvertTranslation["le"],
+			NotEqualToPrefix:       gormqonvertTranslation["ne"],
+			LikePrefix:             gormqonvertTranslation["contains"],
 			NotLikePrefix:          "!~",
 		}
 		if err := db.Use(gormqonvert.New(config)); err != nil {
 			return db, err
 		}
+		cacheGormqonvertTranslationMap.Store("gormqonvertTranslation", gormqonvertTranslation)
 	}
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
@@ -432,7 +445,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType) (*g
 					}
 					currentMap[fieldSnakeCase] = queryRightOperandString
 					if root.Value != "eq" {
-						currentMap[fieldSnakeCase] = operatorTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
+						currentMap[fieldSnakeCase] = gormqonvertTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
 					}
 				}
 				db = db.Where(filterMap)
@@ -478,7 +491,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType) (*g
 						currentMap = currentMap[fieldSnakeCase].(map[string]any)
 						continue
 					}
-					currentMap[fieldSnakeCase] = operatorTranslation[root.Value] + queryRightOperandString
+					currentMap[fieldSnakeCase] = gormqonvertTranslation[root.Value] + queryRightOperandString
 				}
 				db = db.Where(filterMap)
 			} else {

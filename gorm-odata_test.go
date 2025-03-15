@@ -272,65 +272,119 @@ func Test_BuildQuery_Success(t *testing.T) {
 }
 
 func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	// Arrange
-	records := []*MockModel{
+	mockModelRecords := []*MockModel{
 		{
-			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
-			Name:      "test",
-			TestValue: "prdvalue",
+			ID:         uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+			Name:       "test",
+			TestValue:  "prdvalue",
+			MetadataID: ptr.Ptr(uuid.MustParse("1ea3cf2f-5c1f-47c6-b0c3-78f0cee2007b")),
+			Metadata: &Metadata{
+				ID:   uuid.MustParse("1ea3cf2f-5c1f-47c6-b0c3-78f0cee2007b"),
+				Name: "test-1-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("93e75a82-1120-4a21-9995-b057c6b7a517"),
+					Value: "test-1-value",
+				},
+			},
 		},
 		{
-			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
-			Name:      "prd",
-			TestValue: "accvalue",
+			ID:         uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+			Name:       "prd",
+			TestValue:  "accvalue",
+			MetadataID: ptr.Ptr(uuid.MustParse("6afa4aef-a646-415b-ae2d-1ab7fc554c08")),
+			Metadata: &Metadata{
+				ID:   uuid.MustParse("6afa4aef-a646-415b-ae2d-1ab7fc554c08"),
+				Name: "prd-1-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("8dc750d5-9121-4269-be18-fe8f7b7fffb7"),
+					Value: "prd-1-value",
+				},
+			},
 		},
 		{
-			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
-			Name:      "test",
-			TestValue: "prdvalue",
+			ID:         uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+			Name:       "test",
+			TestValue:  "prdvalue",
+			MetadataID: ptr.Ptr(uuid.MustParse("200c2712-cafc-4f00-b6e1-0ff89871f1cd")),
+			Metadata: &Metadata{
+				ID:   uuid.MustParse("200c2712-cafc-4f00-b6e1-0ff89871f1cd"),
+				Name: "test-2-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("605f54df-7983-470e-bc27-41dd9c7c14d8"),
+					Value: "test-2-value",
+				},
+			},
 		},
 		{
-			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
-			Name:      "test",
-			TestValue: "some-testvalue-1",
+			ID:         uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+			Name:       "test",
+			TestValue:  "some-testvalue-1",
+			MetadataID: ptr.Ptr(uuid.MustParse("93ce3788-9e09-462a-a219-12373675d7e8")),
+			Metadata: &Metadata{
+				ID:   uuid.MustParse("93ce3788-9e09-462a-a219-12373675d7e8"),
+				Name: "test-3-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("911bd72a-09f3-425f-942b-1df1cf0220e6"),
+					Value: "test-3-value",
+				},
+			},
 		},
 		{
-			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-			Name:      "test",
-			TestValue: "someaccvalue",
+			ID:         uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+			Name:       "test",
+			TestValue:  "someaccvalue",
+			MetadataID: ptr.Ptr(uuid.MustParse("d96c6f36-9dc9-4a07-a83b-11b62d8ff7db")),
+			Metadata: &Metadata{
+				ID:   uuid.MustParse("d96c6f36-9dc9-4a07-a83b-11b62d8ff7db"),
+				Name: "test-4-metadata",
+				Tag: &Tag{
+					ID:    uuid.MustParse("83fc9b56-9e32-4a1a-876d-70d4605753c7"),
+					Value: "test-4-value",
+				},
+			},
 		},
 	}
-	queryString := "name ne 'prd' and (contains(testValue,'testvalue') or endswith(testValue,'accvalue'))"
-	expectedSql := "SELECT * FROM `mock_models` WHERE name != 'prd' AND (test_value LIKE '%testvalue%' OR test_value LIKE '%accvalue')"
 	expectedResult := []MockModel{
 		{
-			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
-			Name:      "test",
-			TestValue: "some-testvalue-1",
+			ID:         uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+			Name:       "test",
+			TestValue:  "prdvalue",
+			MetadataID: ptr.Ptr(uuid.MustParse("200c2712-cafc-4f00-b6e1-0ff89871f1cd")),
 		},
 		{
-			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-			Name:      "test",
-			TestValue: "someaccvalue",
+			ID:         uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+			Name:       "test",
+			TestValue:  "some-testvalue-1",
+			MetadataID: ptr.Ptr(uuid.MustParse("93ce3788-9e09-462a-a219-12373675d7e8")),
+		},
+		{
+			ID:         uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+			Name:       "test",
+			TestValue:  "someaccvalue",
+			MetadataID: ptr.Ptr(uuid.MustParse("d96c6f36-9dc9-4a07-a83b-11b62d8ff7db")),
 		},
 	}
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 
 	config := gormqonvert.CharacterConfig{
-		GreaterThanPrefix:      ">",
-		GreaterOrEqualToPrefix: ">=",
-		LessThanPrefix:         "<",
-		LessOrEqualToPrefix:    "<=",
-		NotEqualToPrefix:       "!=",
-		LikePrefix:             "+-",
-		NotLikePrefix:          "!+-",
+		GreaterThanPrefix:      "+",
+		GreaterOrEqualToPrefix: "+=",
+		LessThanPrefix:         "-",
+		LessOrEqualToPrefix:    "-=",
+		NotEqualToPrefix:       "/=",
+		LikePrefix:             "::",
+		NotLikePrefix:          "!::",
 	}
 	_ = db.Use(gormqonvert.New(config))
-	db.CreateInBatches(records, len(records))
+	db.CreateInBatches(mockModelRecords, len(mockModelRecords))
+
+	queryString := "name ge 'test' and (metadata/name ge 'test-3-metadata' or startswith(metadata/tag/value,'test-2'))"
+
+	expectedSql := "SELECT * FROM `mock_models` WHERE name >= 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name >= \"test-3-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE tags.value LIKE \"test-2%\")))"
 
 	// Act
 	var dbQuery *gorm.DB
@@ -354,7 +408,6 @@ func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
 }
 
 func Test_BuildQuery_ObjectExpansion(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	// Arrange
@@ -533,5 +586,5 @@ func Test_PrintTree_Error(t *testing.T) {
 }
 
 func cleanupCache() {
-	cacheOperatorTranslationMap.Clear()
+	cacheGormqonvertTranslationMap.Clear()
 }
