@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ing-bank/gormtestutil"
+	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"github.com/survivorbat/ptr"
 	"github.com/test-go/testify/assert"
 	"gorm.io/gorm"
@@ -38,6 +39,7 @@ type MockTimeModel struct {
 }
 
 func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
+	t.Parallel()
 	tests := map[string]struct {
 		queryString string
 		expectedSql string
@@ -87,6 +89,7 @@ func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 }
 
 func Test_BuildQuery_Success(t *testing.T) {
+	t.Parallel()
 	tests := map[string]struct {
 		records        []*MockModel
 		queryString    string
@@ -264,7 +267,88 @@ func Test_BuildQuery_Success(t *testing.T) {
 	}
 }
 
+func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	records := []*MockModel{
+		{
+			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+			Name:      "test",
+			TestValue: "prdvalue",
+		},
+		{
+			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+			Name:      "prd",
+			TestValue: "accvalue",
+		},
+		{
+			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+			Name:      "test",
+			TestValue: "prdvalue",
+		},
+		{
+			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+			Name:      "test",
+			TestValue: "some-testvalue-1",
+		},
+		{
+			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+			Name:      "test",
+			TestValue: "someaccvalue",
+		},
+	}
+	queryString := "name ne 'prd' and (contains(testValue,'testvalue') or endswith(testValue,'accvalue'))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name != 'prd' AND (test_value LIKE '%testvalue%' OR test_value LIKE '%accvalue')"
+	expectedResult := []MockModel{
+		{
+			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+			Name:      "test",
+			TestValue: "some-testvalue-1",
+		},
+		{
+			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+			Name:      "test",
+			TestValue: "someaccvalue",
+		},
+	}
+	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+
+	config := gormqonvert.CharacterConfig{
+		GreaterThanPrefix:      ">",
+		GreaterOrEqualToPrefix: ">=",
+		LessThanPrefix:         "<",
+		LessOrEqualToPrefix:    "<=",
+		NotEqualToPrefix:       "!=",
+		LikePrefix:             "+-",
+		NotLikePrefix:          "!+-",
+	}
+	_ = db.Use(gormqonvert.New(config))
+	db.CreateInBatches(records, len(records))
+
+	// Act
+	var dbQuery *gorm.DB
+	var err error
+	var result []MockModel
+	sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		dbQuery, err = BuildQuery(queryString, tx, SQLite)
+		return dbQuery.Find(&MockModel{})
+	})
+
+	dbQuery, err = BuildQuery(queryString, db, SQLite)
+
+	queryResult := dbQuery.Find(&result)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, dbQuery)
+	assert.Equal(t, expectedSql, sqlQuery)
+	assert.Equal(t, int(len(expectedResult)), int(queryResult.RowsAffected))
+	assert.Equal(t, expectedResult, result)
+}
+
 func Test_BuildQuery_ObjectExpansion(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	mockModelRecords := []*MockModel{
 		{
@@ -379,6 +463,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 }
 
 func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
@@ -392,6 +477,7 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 }
 
 func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
@@ -406,6 +492,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 }
 
 func Test_PrintTree_Success(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	queryString := "name eq 'test' and testValue eq 'testvalue'"
 
@@ -418,6 +505,7 @@ func Test_PrintTree_Success(t *testing.T) {
 }
 
 func Test_PrintTree_Error(t *testing.T) {
+	t.Parallel()
 	// Arrange
 	queryString := "name eq 'test' and (testValue eq 'testvalue' or testValue eq 'accvalue'"
 

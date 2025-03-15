@@ -3,6 +3,7 @@ package gormodata
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -324,20 +325,35 @@ func PrintTree(query string) (string, error) {
 }
 
 func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
-	if err := db.Use(deepgorm.New()); err != nil && err != gorm.ErrRegistered {
-		return db, err
+	if _, ok := db.Config.Plugins[deepgorm.New().Name()]; !ok {
+		if err := db.Use(deepgorm.New()); err != nil {
+			return db, err
+		}
 	}
-	config := gormqonvert.CharacterConfig{
-		GreaterThanPrefix:      ">",
-		GreaterOrEqualToPrefix: ">=",
-		LessThanPrefix:         "<",
-		LessOrEqualToPrefix:    "<=",
-		NotEqualToPrefix:       "!=",
-		LikePrefix:             "~",
-		NotLikePrefix:          "!~",
-	}
-	if err := db.Use(gormqonvert.New(config)); err != nil && err != gorm.ErrRegistered {
-		return db, err
+	if _, ok := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]; ok {
+		plugin := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
+		pluginConfig := reflect.ValueOf(plugin).Elem().FieldByName("config")
+		operatorTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
+		operatorTranslation["ge"] = pluginConfig.FieldByName("GreaterOrEqualToPrefix").String()
+		operatorTranslation["lt"] = pluginConfig.FieldByName("LessThanPrefix").String()
+		operatorTranslation["le"] = pluginConfig.FieldByName("LessOrEqualToPrefix").String()
+		operatorTranslation["ne"] = pluginConfig.FieldByName("NotEqualToPrefix").String()
+		operatorTranslation["contains"] = pluginConfig.FieldByName("LikePrefix").String()
+		operatorTranslation["startswith"] = pluginConfig.FieldByName("LikePrefix").String()
+		operatorTranslation["endswith"] = pluginConfig.FieldByName("LikePrefix").String()
+	} else {
+		config := gormqonvert.CharacterConfig{
+			GreaterThanPrefix:      operatorTranslation["gt"],
+			GreaterOrEqualToPrefix: operatorTranslation["ge"],
+			LessThanPrefix:         operatorTranslation["lt"],
+			LessOrEqualToPrefix:    operatorTranslation["le"],
+			NotEqualToPrefix:       operatorTranslation["ne"],
+			LikePrefix:             operatorTranslation["contains"],
+			NotLikePrefix:          "!~",
+		}
+		if err := db.Use(gormqonvert.New(config)); err != nil {
+			return db, err
+		}
 	}
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
