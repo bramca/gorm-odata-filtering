@@ -331,6 +331,7 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error
 		}
 	}
 	if _, ok := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]; ok {
+		// TODO: Maybe look into caching this to not do these reflect calls on each method call
 		plugin := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
 		pluginConfig := reflect.ValueOf(plugin).Elem().FieldByName("config")
 		operatorTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
