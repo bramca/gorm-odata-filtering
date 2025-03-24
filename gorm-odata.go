@@ -1,7 +1,6 @@
 package gormodata
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -500,7 +499,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType) (*g
 			}
 		}
 	default:
-		return db, errors.New("invalid query")
+		return db, &InvalidQueryError{}
 	}
 
 	return db, nil

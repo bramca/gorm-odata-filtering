@@ -527,16 +527,43 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
 
-	// Arrange
-	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
-	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
-	query := "length(name"
+	tests := map[string]struct {
+		query          string
+		expectedErrMsg string
+	}{
+		"missing closing bracket": {
+			query:          "length(name",
+			expectedErrMsg: "failed to parse query: missing closing bracket ')'",
+		},
+		"missing opening bracket": {
+			query:          "contains(name,'test')) eq 'nametest'",
+			expectedErrMsg: "failed to parse query: missing opening bracket '('",
+		},
+		"parse error last part": {
+			query:          "contains(name,'value') qe 'namevalue'",
+			expectedErrMsg: "failed to parse query: possible typo in \"( 'value' ) qe 'namevalue'\"",
+		},
+		"parse error first part": {
+			query:          "contans(name,'value') eq 'namevalue'",
+			expectedErrMsg: "failed to parse query: possible typo in \"contans( name,'value'\"",
+		},
+	}
 
-	// Act
-	_, err := BuildQuery(query, db, SQLite)
+	for name, testData := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			// Arrange
+			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 
-	// Assert
-	assert.Error(t, err)
+			// Act
+			_, err := BuildQuery(testData.query, db, SQLite)
+
+			// Assert
+			assert.Error(t, err)
+			assert.Equal(t, testData.expectedErrMsg, err.Error())
+		})
+	}
 }
 
 func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
