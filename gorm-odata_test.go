@@ -536,16 +536,16 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 			expectedErrMsg: "failed to parse query: missing closing bracket ')'",
 		},
 		"missing opening bracket": {
-			query:          "contains(name,'test')) eq 'nametest'",
+			query:          "concat(name,'test')) eq 'nametest'",
 			expectedErrMsg: "failed to parse query: missing opening bracket '('",
 		},
 		"parse error last part": {
-			query:          "contains(name,'value') qe 'namevalue'",
+			query:          "concat(name,'value') qe 'namevalue'",
 			expectedErrMsg: "failed to parse query: possible typo in \"( 'value' ) qe 'namevalue'\"",
 		},
 		"parse error first part": {
-			query:          "contans(name,'value') eq 'namevalue'",
-			expectedErrMsg: "failed to parse query: possible typo in \"contans( name,'value'\"",
+			query:          "concot(name,'value') eq 'namevalue'",
+			expectedErrMsg: "failed to parse query: possible typo in \"concot( name,'value'\"",
 		},
 	}
 
