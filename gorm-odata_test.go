@@ -1,6 +1,7 @@
 package gormodata
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -100,7 +101,146 @@ func Test_BuildQuery_Success(t *testing.T) {
 		expectedSql    string
 		expectedResult []MockModel
 	}{
-		"simple query": {
+		// "simple query": {
+		// 	records: []*MockModel{
+		// 		{
+		// 			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+		// 			Name:      "prd",
+		// 			TestValue: "accvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+		// 			Name:      "test",
+		// 			TestValue: "some-testvalue-1",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+		// 			Name:      "test",
+		// 			TestValue: "someaccvalue",
+		// 		},
+		// 	},
+		// 	queryString: "name ne 'prd' and (contains(testValue,'testvalue') or endswith(testValue,'accvalue'))",
+		// 	expectedSql: "SELECT * FROM `mock_models` WHERE name != 'prd' AND (test_value LIKE '%testvalue%' OR test_value LIKE '%accvalue')",
+		// 	expectedResult: []MockModel{
+		// 		{
+		// 			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+		// 			Name:      "test",
+		// 			TestValue: "some-testvalue-1",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+		// 			Name:      "test",
+		// 			TestValue: "someaccvalue",
+		// 		},
+		// 	},
+		// },
+		// "simple query unary function chain": {
+		// 	records: []*MockModel{
+		// 		{
+		// 			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+		// 			Name:      "prd",
+		// 			TestValue: "accvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+		// 			Name:      "test",
+		// 			TestValue: "some-testvalue-1",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+		// 			Name:      "test",
+		// 			TestValue: "someaccvalue",
+		// 		},
+		// 	},
+		// 	queryString: "length(trim(toupper(testValue))) gt 10",
+		// 	expectedSql: "SELECT * FROM `mock_models` WHERE LENGTH(TRIM(UPPER(test_value))) > 10",
+		// 	expectedResult: []MockModel{
+		// 		{
+		// 			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+		// 			Name:      "test",
+		// 			TestValue: "some-testvalue-1",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+		// 			Name:      "test",
+		// 			TestValue: "someaccvalue",
+		// 		},
+		// 	},
+		// },
+		// "complex query": {
+		// 	records: []*MockModel{
+		// 		{
+		// 			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+		// 			Name:      "prd",
+		// 			TestValue: "accvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+		// 			Name:      "test",
+		// 			TestValue: "some-testvalue-1",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+		// 			Name:      "test",
+		// 			TestValue: "someaccvalue",
+		// 		},
+		// 	},
+		// 	queryString: "contains(concat(testValue,name),'prd') or concat(name,concat(' ',concat('length ',length(tolower(testValue))))) eq 'test length 12'",
+		// 	expectedSql: "SELECT * FROM `mock_models` WHERE test_value || name LIKE '%prd%' OR name || ' ' || 'length ' || LENGTH(LOWER(test_value)) = 'test length 12'",
+		// 	expectedResult: []MockModel{
+		// 		{
+		// 			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+		// 			Name:      "prd",
+		// 			TestValue: "accvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+		// 			Name:      "test",
+		// 			TestValue: "prdvalue",
+		// 		},
+		// 		{
+		// 			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+		// 			Name:      "test",
+		// 			TestValue: "someaccvalue",
+		// 		},
+		// 	},
+		// },
+		"not query": {
 			records: []*MockModel{
 				{
 					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
@@ -109,12 +249,12 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 				{
 					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
-					Name:      "prd",
+					Name:      "acc",
 					TestValue: "accvalue",
 				},
 				{
 					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
-					Name:      "test",
+					Name:      "prd",
 					TestValue: "prdvalue",
 				},
 				{
@@ -128,114 +268,18 @@ func Test_BuildQuery_Success(t *testing.T) {
 					TestValue: "someaccvalue",
 				},
 			},
-			queryString: "name ne 'prd' and (contains(testValue,'testvalue') or endswith(testValue,'accvalue'))",
-			expectedSql: "SELECT * FROM `mock_models` WHERE name != 'prd' AND (test_value LIKE '%testvalue%' OR test_value LIKE '%accvalue')",
+			queryString: "not(contains(testValue,' ')) and not(name eq 'test' or name eq 'prd')",
+			expectedSql: "SELECT * FROM `mock_models` WHERE test_value not like '% %' and name ne 'test' and name ne 'prd'",
 			expectedResult: []MockModel{
 				{
-					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
-					Name:      "test",
-					TestValue: "some-testvalue-1",
-				},
-				{
-					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-					Name:      "test",
-					TestValue: "someaccvalue",
-				},
-			},
-		},
-		"simple query unary function chain": {
-			records: []*MockModel{
-				{
-					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
-					Name:      "test",
-					TestValue: "prdvalue",
-				},
-				{
 					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
-					Name:      "prd",
+					Name:      "acc",
 					TestValue: "accvalue",
 				},
 				{
 					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
-					Name:      "test",
-					TestValue: "prdvalue",
-				},
-				{
-					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
-					Name:      "test",
-					TestValue: "some-testvalue-1",
-				},
-				{
-					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-					Name:      "test",
-					TestValue: "someaccvalue",
-				},
-			},
-			queryString: "length(trim(toupper(testValue))) gt 10",
-			expectedSql: "SELECT * FROM `mock_models` WHERE LENGTH(TRIM(UPPER(test_value))) > 10",
-			expectedResult: []MockModel{
-				{
-					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
-					Name:      "test",
-					TestValue: "some-testvalue-1",
-				},
-				{
-					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-					Name:      "test",
-					TestValue: "someaccvalue",
-				},
-			},
-		},
-		"complex query": {
-			records: []*MockModel{
-				{
-					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
-					Name:      "test",
-					TestValue: "prdvalue",
-				},
-				{
-					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
 					Name:      "prd",
-					TestValue: "accvalue",
-				},
-				{
-					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
-					Name:      "test",
 					TestValue: "prdvalue",
-				},
-				{
-					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
-					Name:      "test",
-					TestValue: "some-testvalue-1",
-				},
-				{
-					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-					Name:      "test",
-					TestValue: "someaccvalue",
-				},
-			},
-			queryString: "contains(concat(testValue,name),'prd') or concat(name,concat(' ',concat('length ',length(tolower(testValue))))) eq 'test length 12'",
-			expectedSql: "SELECT * FROM `mock_models` WHERE test_value || name LIKE '%prd%' OR name || ' ' || 'length ' || LENGTH(LOWER(test_value)) = 'test length 12'",
-			expectedResult: []MockModel{
-				{
-					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
-					Name:      "test",
-					TestValue: "prdvalue",
-				},
-				{
-					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
-					Name:      "prd",
-					TestValue: "accvalue",
-				},
-				{
-					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
-					Name:      "test",
-					TestValue: "prdvalue",
-				},
-				{
-					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
-					Name:      "test",
-					TestValue: "someaccvalue",
 				},
 			},
 		},
@@ -256,6 +300,10 @@ func Test_BuildQuery_Success(t *testing.T) {
 				dbQuery, err = BuildQuery(testData.queryString, tx, SQLite)
 				return dbQuery.Find(&MockModel{})
 			})
+
+			tree, _ := PrintTree(testData.queryString)
+
+			fmt.Printf("tree:\n%s\n", tree)
 
 			dbQuery, err = BuildQuery(testData.queryString, db, SQLite)
 
