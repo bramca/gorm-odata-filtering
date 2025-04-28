@@ -11,7 +11,7 @@ require (
 	github.com/survivorbat/gorm-deep-filtering v0.2.0
 	github.com/survivorbat/gorm-query-convert v0.0.1
 	github.com/test-go/testify v1.1.4
-	gorm.io/gorm v1.25.12
+	gorm.io/gorm v1.26.0
 )
 
 require (

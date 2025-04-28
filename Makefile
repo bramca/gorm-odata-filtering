@@ -8,7 +8,6 @@ help:
 
 t: test
 test:
-	fmt
 	go test ./... -timeout=60s -parallel=10 --cover
 
 tr: test.report
