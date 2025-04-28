@@ -38,37 +38,36 @@ var (
 	}
 
 	operatorTranslationReversed = map[string]string{
-		"eq": "!=",
-		"ne": "=",
-		"lt": "<",
-		"le": "<=",
-		"gt": ">",
-		"ge": ">=",
-		"contains": "!~",
+		"eq":         "!=",
+		"ne":         "=",
+		"lt":         ">=",
+		"le":         ">",
+		"gt":         "<=",
+		"ge":         "<",
+		"contains":   "!~",
 		"startswith": "!~",
-		"endswith": "!~",
+		"endswith":   "!~",
 	}
 
 	gormqonvertTranslation = map[string]string{
 		"eq":         "=",
 		"ne":         "!=",
-		"lt":         ">",
-		"le":         ">=",
-		"gt":         "<",
-		"ge":         "<=",
+		"lt":         "<",
+		"le":         "<=",
+		"gt":         ">",
+		"ge":         ">=",
 		"contains":   "~",
 		"startswith": "~",
 		"endswith":   "~",
 	}
 
-
 	gormqonvertTranslationReversed = map[string]string{
 		"eq":         "!=",
 		"ne":         "=",
-		"lt":         ">",
-		"le":         ">=",
-		"gt":         "<",
-		"ge":         "<=",
+		"lt":         ">=",
+		"le":         ">",
+		"gt":         "<=",
+		"ge":         "<",
 		"contains":   "!~",
 		"startswith": "!~",
 		"endswith":   "!~",
@@ -369,13 +368,13 @@ func PrintTree(query string) (string, error) {
 }
 
 func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
-	if _, ok := db.Config.Plugins[deepgorm.New().Name()]; !ok {
+	if _, ok := db.Plugins[deepgorm.New().Name()]; !ok {
 		if err := db.Use(deepgorm.New()); err != nil {
 			return db, err
 		}
 	}
-	if _, ok := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]; ok {
-		plugin := db.Config.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
+	if _, ok := db.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]; ok {
+		plugin := db.Plugins[gormqonvert.New(gormqonvert.CharacterConfig{}).Name()]
 		pluginConfig := reflect.ValueOf(plugin).Elem().FieldByName("config")
 		if gormqonvertTranslationMap, cacheOk := cacheGormqonvertTranslationMap.Load("gormqonvertTranslation"); !cacheOk {
 			gormqonvertTranslation["gt"] = pluginConfig.FieldByName("GreaterThanPrefix").String()
@@ -431,21 +430,28 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error
 		return db, err
 	}
 
-	db, err = buildGormQuery(tree.Root, db, databaseType, operatorTranslation, gormqonvertTranslation)
+	db, err = buildGormQuery(tree.Root, db, databaseType, operatorTranslation, gormqonvertTranslation, false)
 
 	return db, err
 }
 
-func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opTranslation map[string]string, gqTranslation map[string]string) (*gorm.DB, error) {
+func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opTranslation map[string]string, gqTranslation map[string]string, notEnabled bool) (*gorm.DB, error) {
 	cleanDB := db.Session(&gorm.Session{NewDB: true})
-	fmt.Printf("root.Value: %s\n", root.Value)
 	switch root.Type {
 	case syntaxtree.Operator:
 		switch root.Value {
 		case "and":
-			db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation))
+			if notEnabled {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
+			} else {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
+			}
 		case "or":
-			db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation))
+			if notEnabled {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
+			} else {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
+			}
 		case "eq", "ne", "lt", "le", "gt", "ge":
 			// Build up left child
 			leftChild := root.LeftChild
@@ -535,22 +541,27 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 						currentMap = currentMap[fieldSnakeCase].(map[string]any)
 						continue
 					}
-					currentMap[fieldSnakeCase] = gormqonvertTranslation[root.Value] + queryRightOperandString
+					currentMap[fieldSnakeCase] = gqTranslation[root.Value] + queryRightOperandString
 				}
 				db = db.Where(filterMap)
 			} else {
-				queryString := fmt.Sprintf("%s LIKE %s", queryLeftOperandString, queryRightOperandString)
+				replacementString := "%s LIKE %s"
+				if notEnabled {
+					replacementString = "%s NOT LIKE %s"
+				}
+				queryString := fmt.Sprintf(replacementString, queryLeftOperandString, queryRightOperandString)
 				db = db.Where(queryString)
 			}
 		}
 	case syntaxtree.UnaryOperator:
-		// TODO: call buildGormQuery function on children with operatorTranslationReversed and gormqonvertTranslationReversed (and & or should also be reversed)
-		// Only the 'not' unary operator can be root
 		if root.Value != "not" {
 			return db, &InvalidQueryError{}
 		}
-		fmt.Printf("leftchild: %s\n", root.LeftChild.Value)
-
+		var err error
+		db, err = buildGormQuery(root.LeftChild, db, databaseType, operatorTranslationReversed, gormqonvertTranslationReversed, true)
+		if err != nil {
+			return db, err
+		}
 	default:
 		return db, &InvalidQueryError{}
 	}
