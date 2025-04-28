@@ -7,8 +7,14 @@ help:
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z\._-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 t: test
-test: fmt ## Run unit tests, alias: t
+test:
+	fmt
 	go test ./... -timeout=60s -parallel=10 --cover
+
+tr: test.report
+test.report:
+	go test ./... --cover -timeout=300s -parallel=64 -coverprofile coverage.out
+	go tool cover -html=coverage.out
 
 fmt: ## Format go code
 	@go mod tidy
