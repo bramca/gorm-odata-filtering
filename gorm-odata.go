@@ -24,6 +24,7 @@ const (
 )
 
 var (
+	unaryFunctionRegex             = regexp.MustCompile(`(.*)\((.*?)\)`)
 	cacheGormqonvertTranslationMap = tsyncmap.Map[string, map[string]string]{}
 	operatorTranslation            = map[string]string{
 		"eq":         "=",
@@ -481,23 +482,9 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 
 			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			filterMap := map[string]any{}
-			currentMap := filterMap
-			if strings.Contains(leftChild.Value, "/") {
-				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
-				fieldSplit := strings.Split(leftChild.Value, "/")
-				for i, field := range fieldSplit {
-					fieldSnakeCase := strcase.SnakeCase(field)
-					if i < len(fieldSplit)-1 {
-						currentMap[fieldSnakeCase] = map[string]any{}
-						currentMap = currentMap[fieldSnakeCase].(map[string]any)
-						continue
-					}
-					currentMap[fieldSnakeCase] = queryRightOperandString
-					if root.Value != "eq" {
-						currentMap[fieldSnakeCase] = gqTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
-					}
-				}
+			fmt.Printf("[DEBUG] queryLeftOperandString: %s\n", queryLeftOperandString)
+			if strings.Contains(queryLeftOperandString, "/") {
+				filterMap := buildNestedFilter(queryLeftOperandString, leftChild, root, gqTranslation)
 				db = db.Where(filterMap)
 			} else {
 				queryString := fmt.Sprintf("%s %s %s", queryLeftOperandString, opTranslation[root.Value], queryRightOperandString)
@@ -529,20 +516,9 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 
 			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			filterMap := map[string]any{}
-			currentMap := filterMap
-			if strings.Contains(leftChild.Value, "/") {
-				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
-				fieldSplit := strings.Split(leftChild.Value, "/")
-				for i, field := range fieldSplit {
-					fieldSnakeCase := strcase.SnakeCase(field)
-					if i < len(fieldSplit)-1 {
-						currentMap[fieldSnakeCase] = map[string]any{}
-						currentMap = currentMap[fieldSnakeCase].(map[string]any)
-						continue
-					}
-					currentMap[fieldSnakeCase] = gqTranslation[root.Value] + queryRightOperandString
-				}
+			fmt.Printf("[DEBUG] queryLeftOperandString: %s\n", queryLeftOperandString)
+			if strings.Contains(queryLeftOperandString, "/") {
+				filterMap := buildNestedFilter(queryLeftOperandString, leftChild, root, gqTranslation)
 				db = db.Where(filterMap)
 			} else {
 				replacementString := "%s LIKE %s"
@@ -569,6 +545,31 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 	return db, nil
 }
 
+func buildNestedFilter(queryRightOperandString string, leftChild *syntaxtree.Node, root *syntaxtree.Node, gqTranslation map[string]string) map[string]any {
+	filterMap := map[string]any{}
+	currentMap := filterMap
+	queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
+	leftChildValue := leftChild.Value
+	fmt.Printf("[DEBUG] leftChildValue: %s\n", leftChildValue)
+	functionRegexMatches := unaryFunctionRegex.FindStringSubmatch(leftChildValue)
+	fmt.Printf("[DEBUG] functionRegexMatches: %+v\n", functionRegexMatches)
+	fieldSplit := strings.Split(leftChild.Value, "/")
+	for i, field := range fieldSplit {
+		fieldSnakeCase := strcase.SnakeCase(field)
+		if i < len(fieldSplit)-1 {
+			currentMap[fieldSnakeCase] = map[string]any{}
+			currentMap = currentMap[fieldSnakeCase].(map[string]any)
+			continue
+		}
+		currentMap[fieldSnakeCase] = queryRightOperandString
+		if root.Value != "eq" {
+			currentMap[fieldSnakeCase] = gqTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
+		}
+	}
+
+	return filterMap
+}
+
 func buildConcat(databaseType DbType, root *syntaxtree.Node) string {
 	result := ""
 	if root.Value == "concat" {
@@ -589,6 +590,7 @@ func buildConcat(databaseType DbType, root *syntaxtree.Node) string {
 }
 
 func buildUnaryFuncChain(databaseType DbType, root *syntaxtree.Node) string {
+	// TODO: support for nested filters
 	result := ""
 	nodesVisited := map[int]bool{}
 	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
@@ -598,10 +600,16 @@ func buildUnaryFuncChain(databaseType DbType, root *syntaxtree.Node) string {
 		}
 		nodesVisited[root.Id] = true
 		if result == "" {
-			if strings.Contains(unaryFunctionTranslation[databaseType][root.Value], "%") {
-				result = fmt.Sprintf(unaryFunctionTranslation[databaseType][root.Value], strcase.SnakeCase(root.LeftChild.Value))
+			leftChildValue := root.LeftChild.Value
+			if strings.Contains(leftChildValue, "concat") {
+				leftChildValue = buildConcat(databaseType, root.LeftChild)
 			} else {
-				result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], strcase.SnakeCase(root.LeftChild.Value))
+				leftChildValue = strcase.SnakeCase(leftChildValue)
+			}
+			if strings.Contains(unaryFunctionTranslation[databaseType][root.Value], "%") {
+				result = fmt.Sprintf(unaryFunctionTranslation[databaseType][root.Value], leftChildValue)
+			} else {
+				result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], leftChildValue)
 			}
 		} else {
 			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], result)

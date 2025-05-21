@@ -2,6 +2,8 @@ module github.com/bramca/gorm-odata-filtering
 
 go 1.24.1
 
+replace github.com/survivorbat/gorm-deep-filtering => github.com/bramca/gorm-deep-filtering v0.0.0-20250520140452-7b30e90132be
+
 require (
 	github.com/bramca/go-syntax-tree v0.0.3
 	github.com/google/uuid v1.6.0

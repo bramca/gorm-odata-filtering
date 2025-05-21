@@ -1,6 +1,7 @@
 package gormodata
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -232,6 +233,92 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 			},
 		},
+		// TODO: Make this work
+		"nested query unary function chain in left part": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("a0706df6-3c5b-4058-a29a-7714b17a3f89"),
+						Name: "prdmetadata-1",
+						Tag: &Tag{
+							ID:    uuid.MustParse("ac91908e-d0ee-4ccd-9f41-f5e3a2080d8e"),
+							Value: "prdtagvalue-1",
+						},
+					},
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "prd",
+					TestValue: "PRD",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("2b9e9e58-e885-466e-919f-ba2375de6340"),
+						Name: "prdmetadata-2",
+						Tag: &Tag{
+							ID:    uuid.MustParse("c6fd9206-f267-4ca5-9277-d45e962d8b74"),
+							Value: "prdtagvalue-2",
+						},
+					},
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("a12771a2-250e-4bc8-88a2-aa1345757234"),
+						Name: "prdmetadata-3",
+						Tag: &Tag{
+							ID:    uuid.MustParse("9f7987ab-3251-404b-9bd5-8a9d190b91ff"),
+							Value: "prdtagvalue-3",
+						},
+					},
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("deb61cd8-60b0-4de8-a8e2-7672ceff53d5"),
+						Name: "testmetadata-1",
+						Tag: &Tag{
+							ID:    uuid.MustParse("e724992d-a1c9-4310-b7c6-1b879b74390b"),
+							Value: "testtagvalue-1",
+						},
+					},
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "TEST",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("87f56141-990f-4daf-8a38-a98f20026cc5"),
+						Name: "testmetadata-2",
+						Tag: &Tag{
+							ID:    uuid.MustParse("cb5501d9-5ab2-4f58-8bcb-d92987252fae"),
+							Value: "testtagvalue-2",
+						},
+					},
+				},
+			},
+			queryString: "contains(tolower(toupper(metadata/tag/value)),'test') and contains(tolower(concat(testValue,'test')),'value')",
+			expectedSql: "SELECT * FROM `mock_models` WHERE name = LOWER(test_value)",
+			expectedResult: []MockModel{
+				{
+					ID:         uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:       "test",
+					TestValue:  "some-testvalue-1",
+					MetadataID: ptr(uuid.MustParse("deb61cd8-60b0-4de8-a8e2-7672ceff53d5")),
+				},
+				{
+					ID:         uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:       "test",
+					TestValue:  "TEST",
+					MetadataID: ptr(uuid.MustParse("87f56141-990f-4daf-8a38-a98f20026cc5")),
+				},
+			},
+		},
 		"complex query unary function chain": {
 			records: []*MockModel{
 				{
@@ -405,6 +492,8 @@ func Test_BuildQuery_Success(t *testing.T) {
 				return dbQuery.Find(&MockModel{})
 			})
 
+			tree, _ := PrintTree(testData.queryString)
+			fmt.Println(tree)
 			dbQuery, err = BuildQuery(testData.queryString, db, SQLite)
 
 			queryResult := dbQuery.Find(&result)
