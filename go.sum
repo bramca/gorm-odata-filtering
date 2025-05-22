@@ -1,7 +1,7 @@
 github.com/bramca/go-syntax-tree v0.0.3 h1:JU3OGU1a2wAftWR9MqJ2FQhgCJX6lFIaVAmUDa9SlS8=
 github.com/bramca/go-syntax-tree v0.0.3/go.mod h1:qxjkFDdq0AzTgGkMBmHnTfPKdwmqH+fUvKTBUcqYI68=
-github.com/bramca/gorm-deep-filtering v0.0.0-20250520140452-7b30e90132be h1:EUNwcggMUp7TP4XEriLDP0s2QPJjyJ9ZbSfoAI/RNIY=
-github.com/bramca/gorm-deep-filtering v0.0.0-20250520140452-7b30e90132be/go.mod h1:dTZA+OzsanZpprpFmgJul2VKhZUAmAJ7M+CNhPFoCbc=
+github.com/bramca/gorm-deep-filtering v0.0.0-20250522221241-e0cf62969b47 h1:fu/Gy4Dcp8lrJUEEdqfG2rsizx42eZTc3xla7aMSQ48=
+github.com/bramca/gorm-deep-filtering v0.0.0-20250522221241-e0cf62969b47/go.mod h1:e6RYxsZMFg+ZHrpiZSH26IHjtLjzfEL4ahAjC4g0sL8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -34,13 +34,13 @@ github.com/survivorbat/gorm-query-convert v0.0.1 h1:e/wesF2ajiryuJhH/Vs9WrsTU5Mh
 github.com/survivorbat/gorm-query-convert v0.0.1/go.mod h1:3YidTdfqM+KscRLFKhSUNl16tO0CqlEJcG0dFFpVl0g=
 github.com/test-go/testify v1.1.4 h1:Tf9lntrKUMHiXQ07qBScBTSA0dhYQlu83hswqelv1iE=
 github.com/test-go/testify v1.1.4/go.mod h1:rH7cfJo/47vWGdi4GPj16x3/t1xGOj2YxzmNQzk2ghU=
-golang.org/x/text v0.24.0 h1:dd5Bzh4yt5KYA8f9CJHCP4FB4D51c2c6JvN37xJJkJ0=
-golang.org/x/text v0.24.0/go.mod h1:L8rBsPeo2pSS+xqN0d5u2ikmjtmoJbDBT1b7nHvFCdU=
+golang.org/x/text v0.25.0 h1:qVyWApTSYLk/drJRO5mDlNYskwQznZmkpV2c8q9zls4=
+golang.org/x/text v0.25.0/go.mod h1:WEdwpYrmk1qmdHvhkSTNPm3app7v4rsT8F2UD6+VHIA=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gorm.io/driver/sqlite v1.5.2 h1:TpQ+/dqCY4uCigCFyrfnrJnrW9zjpelWVoEVNy5qJkc=
 gorm.io/driver/sqlite v1.5.2/go.mod h1:qxAuCol+2r6PannQDpOP1FP6ag3mKi4esLnB/jHed+4=
-gorm.io/gorm v1.26.0 h1:9lqQVPG5aNNS6AyHdRiwScAVnXHg/L/Srzx55G5fOgs=
-gorm.io/gorm v1.26.0/go.mod h1:8Z33v652h4//uMA76KjeDH8mJXPm1QNCYrMeatR0DOE=
+gorm.io/gorm v1.26.1 h1:ghB2gUI9FkS46luZtn6DLZ0f6ooBJ5IbVej2ENFDjRw=
+gorm.io/gorm v1.26.1/go.mod h1:8Z33v652h4//uMA76KjeDH8mJXPm1QNCYrMeatR0DOE=

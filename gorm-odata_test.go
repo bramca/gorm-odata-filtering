@@ -42,6 +42,8 @@ type MockTimeModel struct {
 	CreatedAt time.Time
 }
 
+// TODO: fix failing tests
+
 func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
@@ -233,8 +235,7 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 			},
 		},
-		// TODO: Make this work
-		"nested query unary function chain in left part": {
+		"nested query unary function chain": {
 			records: []*MockModel{
 				{
 					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
@@ -302,8 +303,8 @@ func Test_BuildQuery_Success(t *testing.T) {
 					},
 				},
 			},
-			queryString: "contains(tolower(toupper(metadata/tag/value)),'test') and contains(tolower(concat(testValue,'test')),'value')",
-			expectedSql: "SELECT * FROM `mock_models` WHERE name = LOWER(test_value)",
+			queryString: "contains(tolower(toupper(metadata/tag/value)),'test') and contains(tolower(concat(testValue,'value')),'testvalue')",
+			expectedSql: "SELECT * FROM `mock_models` WHERE metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE (LOWER(UPPER(value)) LIKE '%test%'))) AND LOWER(test_value || 'value') LIKE '%testvalue%'",
 			expectedResult: []MockModel{
 				{
 					ID:         uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
@@ -464,7 +465,7 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 			},
 			queryString: "not(contains(tolower(testValue),' ') and endswith(metadata/name,'prd')) and not(name eq 'test' or startswith(name,'prd'))",
-			expectedSql: "SELECT * FROM `mock_models` WHERE (LOWER(test_value) NOT LIKE '% %' OR metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name NOT LIKE \"%prd\")) AND (name != 'test' AND name NOT LIKE 'prd%')",
+			expectedSql: "SELECT * FROM `mock_models` WHERE (LOWER(test_value) NOT LIKE '% %' OR metadata_id IN (SELECT `id` FROM `metadata` WHERE name NOT LIKE \"%prd\")) AND (name != 'test' AND name NOT LIKE 'prd%')",
 			expectedResult: []MockModel{
 				{
 					ID:         uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
@@ -480,7 +481,7 @@ func Test_BuildQuery_Success(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
-			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+			_ = db.AutoMigrate(&MockModel{}, &Metadata{}, &Tag{})
 			db.CreateInBatches(testData.records, len(testData.records))
 
 			// Act
