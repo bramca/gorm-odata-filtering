@@ -29,7 +29,7 @@ var (
 
 	// TODO: no proper translation for startswith and endswith functions
 	// look into gorm-deep-filtering for fixing this
-	operatorTranslation            = map[string]string{
+	operatorTranslation = map[string]string{
 		"eq":         "=",
 		"ne":         "!=",
 		"lt":         "<",
@@ -485,7 +485,6 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 
 			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			fmt.Printf("[DEBUG] queryLeftOperandString: %s\n", queryLeftOperandString)
 			if strings.Contains(queryLeftOperandString, "/") {
 				filterMap := buildNestedFilter(queryLeftOperandString, queryRightOperandString, root, gqTranslation, opTranslation)
 				db = db.Where(filterMap)
@@ -519,8 +518,6 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 
 			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			fmt.Printf("[DEBUG] queryLeftOperandString: %s\n", queryLeftOperandString)
-			fmt.Printf("[DEBUG] queryRightOperandString: %s\n", queryRightOperandString)
 			if strings.Contains(queryLeftOperandString, "/") {
 				filterMap := buildNestedFilter(queryLeftOperandString, queryRightOperandString, root, gqTranslation, opTranslation)
 				db = db.Where(filterMap)
@@ -556,7 +553,6 @@ func buildNestedFilter(queryLeftOperandString string, queryRightOperandString st
 	leftOperandField := queryLeftOperandString
 	functionRegexMatches := unaryFunctionRegex.FindStringSubmatch(queryLeftOperandString)
 	unaryFunctionMatch := ""
-	fmt.Printf("[DEBUG] functionRegexMatches: %+v\n", functionRegexMatches)
 	if len(functionRegexMatches) == 3 {
 		queryRightOperandString = opTranslation[root.Value] + strings.ReplaceAll(root.RightChild.Value, "'", "")
 		leftOperandField = functionRegexMatches[2]
@@ -572,7 +568,7 @@ func buildNestedFilter(queryLeftOperandString string, queryRightOperandString st
 		}
 		if unaryFunctionMatch != "" {
 			fieldSnakeCase = unaryFunctionMatch + fieldSnakeCase
-			for i = range len(strings.Split(unaryFunctionMatch, "("))-1 {
+			for i = range len(strings.Split(unaryFunctionMatch, "(")) - 1 {
 				fieldSnakeCase += ")"
 			}
 		}
@@ -581,8 +577,6 @@ func buildNestedFilter(queryLeftOperandString string, queryRightOperandString st
 			currentMap[fieldSnakeCase] = gqTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
 		}
 	}
-
-	fmt.Printf("[DEBUG] filterMap: %+v\n", filterMap)
 
 	return filterMap
 }

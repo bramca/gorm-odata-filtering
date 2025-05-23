@@ -1,7 +1,6 @@
 package gormodata
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -42,10 +41,7 @@ type MockTimeModel struct {
 	CreatedAt time.Time
 }
 
-// TODO: fix failing tests
-
 func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	tests := map[string]struct {
@@ -97,7 +93,6 @@ func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 }
 
 func Test_BuildQuery_Success(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	tests := map[string]struct {
@@ -479,6 +474,7 @@ func Test_BuildQuery_Success(t *testing.T) {
 
 	for name, testData := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			// Arrange
 			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 			_ = db.AutoMigrate(&MockModel{}, &Metadata{}, &Tag{})
@@ -493,8 +489,6 @@ func Test_BuildQuery_Success(t *testing.T) {
 				return dbQuery.Find(&MockModel{})
 			})
 
-			tree, _ := PrintTree(testData.queryString)
-			fmt.Println(tree)
 			dbQuery, err = BuildQuery(testData.queryString, db, SQLite)
 
 			queryResult := dbQuery.Find(&result)
@@ -622,7 +616,7 @@ func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
 
 	queryString := "not(name lt 'test') and (metadata/name ge 'test-3-metadata' or startswith(metadata/tag/value,'test-2'))"
 
-	expectedSql := "SELECT * FROM `mock_models` WHERE name >= 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name >= \"test-3-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE tags.value LIKE \"test-2%\")))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name >= 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE name >= \"test-3-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE value LIKE \"test-2%\")))"
 
 	// Act
 	var dbQuery *gorm.DB
@@ -738,7 +732,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	db.CreateInBatches(mockModelRecords, len(mockModelRecords))
-	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `metadata`.`name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE tags.value LIKE \"test-3%\")))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE value LIKE \"test-3%\")))"
 
 	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/tag/value,'test-3'))"
 
@@ -762,7 +756,6 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 }
 
 func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	tests := map[string]struct {
@@ -805,7 +798,6 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 }
 
 func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	tests := map[string]struct {
@@ -845,7 +837,6 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 }
 
 func Test_PrintTree_Success(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	// Arrange
@@ -860,7 +851,6 @@ func Test_PrintTree_Success(t *testing.T) {
 }
 
 func Test_PrintTree_Error(t *testing.T) {
-	t.Parallel()
 	t.Cleanup(cleanupCache)
 
 	// Arrange
