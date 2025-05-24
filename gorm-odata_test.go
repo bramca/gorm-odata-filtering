@@ -1,6 +1,7 @@
 package gormodata
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -470,6 +471,71 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 			},
 		},
+		"complex not query nested": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("36074e50-4515-4947-8fe2-c804e69d8ece"),
+						Name: "prdmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "acc",
+					TestValue: "accvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("e1db1bd7-b5a3-45bf-943f-3d93a185be9e"),
+						Name: "accmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "prd",
+					TestValue: "prdvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("48afb40e-9c7c-4733-8a52-65245d901a84"),
+						Name: "prdmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("1bda41df-5d75-4697-bdd8-bffe6b1d2724"),
+						Name: "testmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("5b9aa14b-6432-4006-9b4a-517eca993c56"),
+						Name: "somemetadata",
+					},
+				},
+			},
+			queryString: "not(contains(tolower(metadata/name),'prd') or contains(tolower(metadata/name),'acc')) and length(metadata/name) gt 8",
+			expectedSql: "SELECT * FROM `mock_models` WHERE (metadata_id IN (SELECT `id` FROM `metadata` WHERE (LOWER(name) NOT LIKE '%prd%')) AND metadata_id IN (SELECT `id` FROM `metadata` WHERE (LOWER(name) NOT LIKE '%acc%'))) AND metadata_id IN (SELECT `id` FROM `metadata` WHERE (LENGTH(name) > 8))",
+			expectedResult: []MockModel{
+				{
+					ID:         uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:       "test",
+					TestValue:  "some-testvalue-1",
+					MetadataID: ptr(uuid.MustParse("1bda41df-5d75-4697-bdd8-bffe6b1d2724")),
+				},
+				{
+					ID:         uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:       "test",
+					TestValue:  "someaccvalue",
+					MetadataID: ptr(uuid.MustParse("5b9aa14b-6432-4006-9b4a-517eca993c56")),
+				},
+			},
+		},
 	}
 
 	for name, testData := range tests {
@@ -489,6 +555,8 @@ func Test_BuildQuery_Success(t *testing.T) {
 				return dbQuery.Find(&MockModel{})
 			})
 
+			tree, _ := PrintTree(testData.queryString)
+			fmt.Printf("tree:\n%s", tree)
 			dbQuery, err = BuildQuery(testData.queryString, db, SQLite)
 
 			queryResult := dbQuery.Find(&result)
