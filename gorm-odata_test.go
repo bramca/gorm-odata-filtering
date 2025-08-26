@@ -377,7 +377,7 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 			},
 			queryString: "not(contains(tolower(testValue),' ') and endswith(metadata/name,'prd')) and not(name eq 'test' or startswith(name,'prd'))",
-			expectedSql: "SELECT * FROM `mock_models` WHERE (LOWER(test_value) NOT LIKE '% %' OR metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name NOT LIKE \"%prd\")) AND (name != 'test' AND name NOT LIKE 'prd%')",
+			expectedSql: "SELECT * FROM `mock_models` WHERE (LOWER(test_value) NOT LIKE '% %' OR metadata_id IN (SELECT `id` FROM `metadata` WHERE name NOT LIKE \"%prd\")) AND (name != 'test' AND name NOT LIKE 'prd%')",
 			expectedResult: []MockModel{
 				{
 					ID:         uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
@@ -532,7 +532,7 @@ func Test_BuildQuery_SuccessCustomPluginConfig(t *testing.T) {
 
 	queryString := "not(name lt 'test') and (metadata/name ge 'test-3-metadata' or startswith(metadata/tag/value,'test-2'))"
 
-	expectedSql := "SELECT * FROM `mock_models` WHERE name >= 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE metadata.name >= \"test-3-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE tags.value LIKE \"test-2%\")))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name >= 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE name >= \"test-3-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE value LIKE \"test-2%\")))"
 
 	// Act
 	var dbQuery *gorm.DB
@@ -648,7 +648,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
 	db.CreateInBatches(mockModelRecords, len(mockModelRecords))
-	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `metadata`.`name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE tags.value LIKE \"test-3%\")))"
+	expectedSql := "SELECT * FROM `mock_models` WHERE name = 'test' AND (metadata_id IN (SELECT `id` FROM `metadata` WHERE `metadata`.`name` = \"test-4-metadata\") OR metadata_id IN (SELECT `id` FROM `metadata` WHERE tag_id IN (SELECT `id` FROM `tags` WHERE value LIKE \"test-3%\")))"
 
 	queryString := "name eq 'test' and (metadata/name eq 'test-4-metadata' or startswith(metadata/tag/value,'test-3'))"
 
