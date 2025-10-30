@@ -11,16 +11,16 @@ require (
 	github.com/survivorbat/gorm-deep-filtering v0.3.0
 	github.com/survivorbat/gorm-query-convert v0.1.0
 	github.com/test-go/testify v1.1.4
-	gorm.io/gorm v1.30.1
+	gorm.io/gorm v1.31.0
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/mattn/go-sqlite3 v1.14.17 // indirect
+	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
-	gorm.io/driver/sqlite v1.5.2 // indirect
+	golang.org/x/text v0.30.0 // indirect
+	gorm.io/driver/sqlite v1.6.0 // indirect
 )
