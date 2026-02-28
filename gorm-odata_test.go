@@ -849,7 +849,7 @@ func Test_GetAST_Success(t *testing.T) {
 	assert.NotEmpty(t, tree)
 }
 
-func Test_PrintTree_Error(t *testing.T) {
+func Test_GetAST_Error(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
 
@@ -858,6 +858,35 @@ func Test_PrintTree_Error(t *testing.T) {
 
 	// Act
 	_, err := GetAST(queryString)
+
+	// Assert
+	assert.Error(t, err)
+}
+
+func Test_PrintTree_Success(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+
+	// Arrange
+	queryString := "name eq 'test' and testValue eq 'testvalue'"
+
+	// Act
+	tree, err := PrintTree(queryString)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotEmpty(t, tree)
+}
+
+func Test_PrintTree_Error(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+
+	// Arrange
+	queryString := "name eq 'test' and (testValue eq 'testvalue' or testValue eq 'accvalue'"
+
+	// Act
+	_, err := PrintTree(queryString)
 
 	// Assert
 	assert.Error(t, err)

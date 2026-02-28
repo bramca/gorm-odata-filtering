@@ -21,6 +21,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	gorm.io/driver/sqlite v1.6.0 // indirect
 )

@@ -351,6 +351,15 @@ var (
 	}
 )
 
+func PrintTree(query string) (string, error) {
+	tree, err := GetAST(query)
+	if err != nil {
+		return "", err
+	}
+
+	return tree.String(), nil
+}
+
 func GetAST(query string) (syntaxtree.SyntaxTree, error) {
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
