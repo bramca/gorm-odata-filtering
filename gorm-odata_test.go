@@ -636,7 +636,7 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 	mockModelRecords := []*MockModel{
 		{
 			ID:         uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
-			Name:       "test",
+			Name:       "test%",
 			TestValue:  "prdvalue",
 			MetadataID: ptr(uuid.MustParse("1ea3cf2f-5c1f-47c6-b0c3-78f0cee2007b")),
 			Metadata: &Metadata{
@@ -727,8 +727,8 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 		},
 		"always true via contains": {
 			query:               "contains(name,'%') or '1'='1'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name LIKE \"%%%\" OR name LIKE \"%%%\"",
-			expectedRowAffected: 3,
+			expectedSql:         "SELECT * FROM `mock_models` WHERE name LIKE \"%\\%%\" ESCAPE '\\' OR name LIKE \"%\\%%\" ESCAPE '\\'",
+			expectedRowAffected: 1,
 			expectedErr:         false,
 		},
 		"nested quote bypass": {
@@ -736,12 +736,6 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \" OR 1=1 --\"",
 			expectedRowAffected: 0,
 			expectedErr:         false,
-		},
-		"semicolon in value treated as literal": {
-			query:               "name eq 'a;b'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"a;b\"",
-			expectedRowAffected: 0,
-			expectedErr:         true,
 		},
 		"double quote in value": {
 			query:               "name eq 'test\"value'",
@@ -754,6 +748,18 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"test`value\"",
 			expectedRowAffected: 0,
 			expectedErr:         false,
+		},
+		"nested query termination": {
+			query:               "name eq 'foo'); DROP TABLE users; --",
+			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo); DROP TABLE users; --\"",
+			expectedRowAffected: 0,
+			expectedErr:         true,
+		},
+		"boolean-based delay attack": {
+			query:               "name eq 'test' AND SLEEP(5)",
+			expectedSql:         "",
+			expectedRowAffected: 0,
+			expectedErr:         true,
 		},
 	}
 
