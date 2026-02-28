@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
 	"github.com/survivorbat/go-tsyncmap"
+
 	deepgorm "github.com/survivorbat/gorm-deep-filtering"
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"gorm.io/gorm"
@@ -351,6 +353,8 @@ var (
 	}
 )
 
+// PrintTree
+// Get a printable version of the abstract syntax tree for a given query
 func PrintTree(query string) (string, error) {
 	tree, err := GetAST(query)
 	if err != nil {
@@ -360,6 +364,8 @@ func PrintTree(query string) (string, error) {
 	return tree.String(), nil
 }
 
+// GetAST
+// Get the full abstract syntaxtree for a given query
 func GetAST(query string) (syntaxtree.SyntaxTree, error) {
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
@@ -377,9 +383,78 @@ func GetAST(query string) (syntaxtree.SyntaxTree, error) {
 	return tree, nil
 }
 
+// ValidQuery
+// Validates input query against an input gorm model
+//   - checks max tree depth if set > 0
+//   - checks left operands for being existing column names
+func ValidQuery(query string, input any, maxTreeDepth int, db *gorm.DB) error {
+	columnNamesList := columnNames(input, db.NamingStrategy)
+	tree := syntaxtree.SyntaxTree{
+		OperatorPrecedence:    operatorPrecedence,
+		OperatorParsers:       operatorParsers,
+		BinaryFunctionParsers: binaryFunctionParsers,
+		UnaryFunctionParsers:  unaryFunctionParsers,
+		Separator:             ";",
+	}
+
+	err := tree.ConstructTree(query)
+	if err != nil {
+		return err
+	}
+
+	return validateQuery(tree, maxTreeDepth, columnNamesList, db.NamingStrategy)
+}
+
+// BuildQueryWithValidation
+// Builds a gorm query based on an odata query string
+// with extra pre-validation on the input query.
+//
+// It validates input query against an input gorm model
+//   - checks max tree depth if set > 0
+//   - checks left operands for being existing column names
+func BuildQueryWithValidation(query string, db *gorm.DB, databaseType DbType, input any, maxTreeDepth int) (*gorm.DB, error) {
+	var err error
+	db, err = checkDbPlugins(db)
+	if err != nil {
+		return db, err
+	}
+
+	tree := syntaxtree.SyntaxTree{
+		OperatorPrecedence:    operatorPrecedence,
+		OperatorParsers:       operatorParsers,
+		BinaryFunctionParsers: binaryFunctionParsers,
+		UnaryFunctionParsers:  unaryFunctionParsers,
+		Separator:             ";",
+	}
+
+	err = tree.ConstructTree(query)
+	if err != nil {
+		return db, err
+	}
+
+	columnNamesList := columnNames(input, db.NamingStrategy)
+
+	err = validateQuery(tree, maxTreeDepth, columnNamesList, db.NamingStrategy)
+	if err != nil {
+		return db, err
+	}
+
+	columnTranslationFunc := func(s string) string {
+		return db.NamingStrategy.ColumnName("", s)
+	}
+
+	db, err = buildGormQuery(tree.Root, db, databaseType, operatorTranslation, gormqonvertTranslation, columnTranslationFunc, false)
+
+	return db, err
+}
+
 // BuildQuery
 // Builds a gorm query based on an odata query string
 // using the default database naming strategy for translating columns
+//
+// WARNING: this function does not validate the input query against the input gorm model.
+//
+// It is advised to use either the ValidQuery function before or the BuildQueryWithValidation instead
 func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
 	var err error
 	db, err = checkDbPlugins(db)
@@ -444,10 +519,14 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			rightChild := root.RightChild
 			queryRightOperandString := ""
 			if rightChild.Type == syntaxtree.UnaryOperator {
-				return db, &InvalidQueryError{}
+				return db, &InvalidQueryError{
+					Msg: "unary operators not supported as right operand of equality operators",
+				}
 			}
 			if rightChild.Value == "concat" {
-				return db, &InvalidQueryError{}
+				return db, &InvalidQueryError{
+					Msg: "concat not supported as right operand of equality operators",
+				}
 			}
 			if rightChild.Type == syntaxtree.RightOperand {
 				queryRightOperandString = strings.ReplaceAll(rightChild.Value, "'", "")
@@ -542,7 +621,9 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 		}
 	case syntaxtree.UnaryOperator:
 		if root.Value != "not" {
-			return db, &InvalidQueryError{}
+			return db, &InvalidQueryError{
+				Msg: "root level operators other then 'not' are not supported",
+			}
 		}
 		var err error
 		db, err = buildGormQuery(root.LeftChild, db, databaseType, operatorTranslationReversed, gormqonvertTranslationReversed, columnTranslation, true)
@@ -550,7 +631,9 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			return db, err
 		}
 	default:
-		return db, &InvalidQueryError{}
+		return db, &InvalidQueryError{
+			Msg: "unknown query type",
+		}
 	}
 
 	return db, nil
@@ -565,7 +648,7 @@ func buildConcat(databaseType DbType, columnTranslation func(string) string, roo
 		result = buildUnaryFuncChain(databaseType, columnTranslation, root)
 	}
 
-	if root.Type == syntaxtree.LeftOperand {
+	if root.Type == syntaxtree.LeftOperand || root.Type == syntaxtree.RightOperand {
 		result = root.Value
 		if !strings.Contains(result, "'") {
 			result = columnTranslation(result)
@@ -656,33 +739,79 @@ func checkDbPlugins(db *gorm.DB) (*gorm.DB, error) {
 	return db, nil
 }
 
-func tableName(input any, db *gorm.DB) string {
+func validateQuery(tree syntaxtree.SyntaxTree, maxTreeDepth int, columnNamesList []string, schemaNamer schema.Namer) error {
+	depth := 0
+	currentNode := tree.Root
+	nodesVisited := map[int]bool{}
+
+	for !nodesVisited[currentNode.Id] {
+		if maxTreeDepth > 0 && depth > maxTreeDepth {
+			return &InvalidQueryError{
+				Msg: fmt.Sprintf("maximum query complexity exceeded: %d > %d", depth, maxTreeDepth),
+			}
+		}
+		if currentNode.Type == syntaxtree.Operator || currentNode.Type == syntaxtree.UnaryOperator {
+			if currentNode.LeftChild != nil && !nodesVisited[currentNode.LeftChild.Id] {
+				currentNode = currentNode.LeftChild
+				depth += 1
+
+				continue
+			}
+			if currentNode.RightChild != nil && !nodesVisited[currentNode.RightChild.Id] {
+				currentNode = currentNode.RightChild
+				depth += 1
+
+				continue
+			}
+
+		}
+
+		if currentNode.Type == syntaxtree.LeftOperand && currentNode.Parent.Value != "concat" {
+			columnName := schemaNamer.ColumnName("", currentNode.Value)
+			if strings.Contains(columnName, "/") {
+				splitName := strings.Split(columnName, "/")
+				columnName = splitName[0]
+			}
+			if !slices.Contains(columnNamesList, columnName) {
+				return &InvalidQueryError{
+					Msg: fmt.Sprintf("unknown column name '%s'", columnName),
+				}
+			}
+		}
+
+		nodesVisited[currentNode.Id] = true
+
+		if currentNode.Parent != nil {
+			currentNode = currentNode.Parent
+			depth -= 1
+		}
+	}
+
+	return nil
+}
+
+func tableName(input any, schemaNamer schema.Namer) string {
 	tabler, ok := input.(schema.Tabler)
 	if ok {
 		return tabler.TableName()
 	}
 
 	typeOf := reflect.TypeOf(input)
-	return db.NamingStrategy.TableName(typeOf.Name())
+	return schemaNamer.TableName(typeOf.Name())
 }
 
-func columnNamesMap(input any, db *gorm.DB) map[string]string {
-	tableName := tableName(input, db)
+func columnNames(input any, schemaNamer schema.Namer) []string {
+	tableName := tableName(input, schemaNamer)
 	typeOf := reflect.TypeOf(input)
 	flds := typeOf.NumField()
-	res := make(map[string]string, flds)
+	res := make([]string, flds)
 	for i := range flds {
 		fld := typeOf.Field(i)
 		name := fld.Name
 
-		jsonName := name
-		if tag := fld.Tag.Get("json"); tag != "" && tag != "-" {
-			jsonName, _, _ = strings.Cut(tag, ",")
-		}
-
 		var gormName string
 		if tag := fld.Tag.Get("gorm"); tag != "" {
-			for _, setting := range strings.Split(tag, ";") {
+			for setting := range strings.SplitSeq(tag, ";") {
 				if !strings.HasPrefix(setting, "column:") {
 					continue
 				}
@@ -692,10 +821,10 @@ func columnNamesMap(input any, db *gorm.DB) map[string]string {
 		}
 
 		if gormName == "" {
-			gormName = db.NamingStrategy.ColumnName(tableName, name)
+			gormName = schemaNamer.ColumnName(tableName, name)
 		}
 
-		res[jsonName] = gormName
+		res[i] = gormName
 	}
 
 	return res

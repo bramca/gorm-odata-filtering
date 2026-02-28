@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ing-bank/gormtestutil"
+	"github.com/stoewer/go-strcase"
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"github.com/test-go/testify/assert"
 	"gorm.io/gorm"
@@ -40,6 +41,12 @@ type Tag struct {
 type MockTimeModel struct {
 	Name      string
 	CreatedAt time.Time
+}
+
+type CustomReplacer struct{}
+
+func (c CustomReplacer) Replace(s string) string {
+	return strcase.UpperSnakeCase(s)
 }
 
 func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
@@ -98,12 +105,74 @@ func Test_BuildQuery_CustomNamingStrategy(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
 
+	// Arrange
+	records := []*MockModel{
+		{
+			ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+			Name:      "test",
+			TestValue: "prdvalue",
+		},
+		{
+			ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+			Name:      "prd",
+			TestValue: "accvalue",
+		},
+		{
+			ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+			Name:      "test",
+			TestValue: "prdvalue",
+		},
+		{
+			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+			Name:      "test",
+			TestValue: "some-testvalue-1",
+		},
+		{
+			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+			Name:      "test",
+			TestValue: "someaccvalue",
+		},
+	}
+	expectedResult := []MockModel{
+		{
+			ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+			Name:      "test",
+			TestValue: "some-testvalue-1",
+		},
+		{
+			ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+			Name:      "test",
+			TestValue: "someaccvalue",
+		},
+	}
+	queryString := "name ne 'prd' and (contains(testValue,'testvalue') or endswith(testValue,'accvalue'))"
+	expectedSql := "SELECT * FROM `pre_MOCK_MODELS` WHERE NAME != \"prd\" AND (TEST_VALUE LIKE \"%testvalue%\" OR TEST_VALUE LIKE \"%accvalue\")"
 	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
 	db.NamingStrategy = schema.NamingStrategy{
-		TablePrefix: "pre_",
+		TablePrefix:  "pre_",
+		NameReplacer: CustomReplacer{},
+		NoLowerCase:  true,
 	}
-	_ = db.AutoMigrate(&MockModel{})
-	// Arrange
+	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+	db.CreateInBatches(records, len(records))
+	var dbQuery *gorm.DB
+	var err error
+	var result []MockModel
+
+	// Act
+	sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		dbQuery, err = BuildQuery(queryString, tx, SQLite)
+		return dbQuery.Find(&result)
+	})
+
+	dbQuery, err = BuildQuery(queryString, db, SQLite)
+
+	queryResult := dbQuery.Find(&result)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedSql, sqlQuery)
+	assert.Equal(t, int(len(expectedResult)), int(queryResult.RowsAffected))
+	assert.Equal(t, expectedResult, result)
 }
 
 func Test_BuildQuery_Success(t *testing.T) {
@@ -720,6 +789,12 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedRowAffected: 0,
 			expectedErr:         false,
 		},
+		"drop - injection via concat": {
+			query:               "concat(name,;DROP * from mock_models;testValue) eq 'test'",
+			expectedSql:         "SELECT * FROM `mock_models` WHERE name || test_value = \"test\"",
+			expectedRowAffected: 0,
+			expectedErr:         false,
+		},
 		"comment injection in value": {
 			query:               "name eq 'foo' --",
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo --\"",
@@ -733,8 +808,8 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedErr:         false,
 		},
 		"always true via contains": {
-			query:               "contains(name,'%') or '1'='1'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name LIKE \"%\\%%\" ESCAPE '\\' OR name LIKE \"%\\%%\" ESCAPE '\\'",
+			query:               "contains(name,'%')",
+			expectedSql:         "SELECT * FROM `mock_models` WHERE name LIKE \"%\\%%\" ESCAPE '\\'",
 			expectedRowAffected: 1,
 			expectedErr:         false,
 		},
@@ -787,6 +862,283 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 	}
 }
 
+func Test_BuildQueryWithValidation_ErrorOnInvalidQuery(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+
+	tests := map[string]struct {
+		query          string
+		maxTreeDepth   int
+		expectedErrMsg string
+	}{
+		"max tree depth exceeded": {
+			query:          "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
+			maxTreeDepth:   2,
+			expectedErrMsg: "invalid query: maximum query complexity exceeded: 3 > 2",
+		},
+		"error on max tree depth": {
+			query:          "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
+			maxTreeDepth:   2,
+			expectedErrMsg: "invalid query: maximum query complexity exceeded: 3 > 2",
+		},
+	}
+
+	for name, data := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+
+			// Act
+			_, err := BuildQueryWithValidation(data.query, db, SQLite, MockModel{}, data.maxTreeDepth)
+
+			// Assert
+			assert.Error(t, err)
+			assert.Equal(t, data.expectedErrMsg, err.Error())
+		})
+	}
+}
+
+func Test_BuildQueryWithValidation_Success(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+
+	tests := map[string]struct {
+		records        []*MockModel
+		queryString    string
+		expectedSql    string
+		expectedResult []MockModel
+	}{
+		"simple query": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "prd",
+					TestValue: "accvalue",
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+				},
+			},
+			queryString: "name ne 'prd' and (contains(testValue,'testvalue') or endswith(testValue,'accvalue'))",
+			expectedSql: "SELECT * FROM `mock_models` WHERE name != \"prd\" AND (test_value LIKE \"%testvalue%\" OR test_value LIKE \"%accvalue\")",
+			expectedResult: []MockModel{
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+				},
+			},
+		},
+		"simple query unary function chain": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "prd",
+					TestValue: "accvalue",
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+				},
+			},
+			queryString: "length(trim(toupper(testValue))) gt 10",
+			expectedSql: "SELECT * FROM `mock_models` WHERE LENGTH(TRIM(UPPER(test_value))) > 10",
+			expectedResult: []MockModel{
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+				},
+			},
+		},
+		"complex query": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "prd",
+					TestValue: "accvalue",
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+				},
+			},
+			queryString: "contains(concat(testValue,name),'prd') or concat(name,concat(' ',concat('length ',length(tolower(testValue))))) eq 'test length 12'",
+			expectedSql: "SELECT * FROM `mock_models` WHERE test_value || name LIKE \"%prd%\" OR name || ' ' || 'length ' || LENGTH(LOWER(test_value)) = \"test length 12\"",
+			expectedResult: []MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "prd",
+					TestValue: "accvalue",
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+				},
+			},
+		},
+		"complex not query": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("36074e50-4515-4947-8fe2-c804e69d8ece"),
+						Name: "prdmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "acc",
+					TestValue: "accvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("e1db1bd7-b5a3-45bf-943f-3d93a185be9e"),
+						Name: "accmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "prd",
+					TestValue: "prdvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("48afb40e-9c7c-4733-8a52-65245d901a84"),
+						Name: "prdmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("1bda41df-5d75-4697-bdd8-bffe6b1d2724"),
+						Name: "testmetadata",
+					},
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+					Metadata: &Metadata{
+						ID:   uuid.MustParse("5b9aa14b-6432-4006-9b4a-517eca993c56"),
+						Name: "somemetadata",
+					},
+				},
+			},
+			queryString: "not(contains(tolower(testValue),' ') and endswith(metadata/name,'prd')) and not(name eq 'test' or startswith(name,'prd'))",
+			expectedSql: "SELECT * FROM `mock_models` WHERE (LOWER(test_value) NOT LIKE \"% %\" OR metadata_id IN (SELECT `id` FROM `metadata` WHERE name NOT LIKE \"%prd\")) AND (name != \"test\" AND name NOT LIKE \"prd%\")",
+			expectedResult: []MockModel{
+				{
+					ID:         uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:       "acc",
+					TestValue:  "accvalue",
+					MetadataID: ptr(uuid.MustParse("e1db1bd7-b5a3-45bf-943f-3d93a185be9e")),
+				},
+			},
+		},
+	}
+
+	for name, testData := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+			db.CreateInBatches(testData.records, len(testData.records))
+
+			// Act
+			var dbQuery *gorm.DB
+			var err error
+			var result []MockModel
+			sqlQuery := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+				dbQuery, err = BuildQuery(testData.queryString, tx, SQLite)
+				return dbQuery.Find(&MockModel{})
+			})
+
+			dbQuery, err = BuildQueryWithValidation(testData.queryString, db, SQLite, MockModel{}, 7)
+
+			queryResult := dbQuery.Find(&result)
+
+			// Assert
+			assert.NoError(t, err)
+			assert.NotNil(t, dbQuery)
+			assert.Equal(t, testData.expectedSql, sqlQuery)
+			assert.Equal(t, int(len(testData.expectedResult)), int(queryResult.RowsAffected))
+			assert.Equal(t, testData.expectedResult, result)
+		})
+	}
+}
+
 func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
@@ -801,19 +1153,19 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 		},
 		"invalid unary function as root": {
 			query:          "length(name)",
-			expectedErrMsg: "invalid query",
+			expectedErrMsg: "invalid query: root level operators other then 'not' are not supported",
 		},
 		"invalid not query": {
 			query:          "not(length(name))",
-			expectedErrMsg: "invalid query",
+			expectedErrMsg: "invalid query: root level operators other then 'not' are not supported",
 		},
 		"unsupported concat on right operand": {
 			query:          "name eq concat('test',test_value)",
-			expectedErrMsg: "invalid query",
+			expectedErrMsg: "invalid query: concat not supported as right operand of equality operators",
 		},
 		"unsupported unary function on right operand": {
 			query:          "name eq tolower(test_value)",
-			expectedErrMsg: "invalid query",
+			expectedErrMsg: "invalid query: unary operators not supported as right operand of equality operators",
 		},
 	}
 
@@ -833,6 +1185,58 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 			assert.Equal(t, err.Error(), testData.expectedErrMsg)
 		})
 	}
+}
+
+func Test_ValidQuery_ReturnsError(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+	tests := map[string]struct {
+		queryString    string
+		maxTreeDepth   int
+		expectedErrMsg string
+	}{
+		"error on wrong column": {
+			queryString:    "contains(testValue,'test') or contains(toupper(name),'NAME') and test or contains(tolower(value),'test')",
+			maxTreeDepth:   0,
+			expectedErrMsg: "invalid query: unknown column name 'value'",
+		},
+		"error on max tree depth": {
+			queryString:    "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
+			maxTreeDepth:   2,
+			expectedErrMsg: "invalid query: maximum query complexity exceeded: 3 > 2",
+		},
+	}
+
+	for name, data := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+
+			// Act
+			err := ValidQuery(data.queryString, MockModel{}, data.maxTreeDepth, db)
+
+			// Assert
+			assert.Error(t, err)
+			assert.Equal(t, data.expectedErrMsg, err.Error())
+		})
+	}
+}
+
+func Test_ValidQuery_ReturnsNoError(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+
+	// Arrange
+	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+	queryString := "contains(concat(testValue,name),'prd') or concat(name,concat(' ',concat('length ',length(tolower(testValue))))) eq 'test length 12'"
+
+	// Act
+	err := ValidQuery(queryString, MockModel{}, 0, db)
+
+	// Assert
+	assert.NoError(t, err)
 }
 
 func Test_GetAST_Success(t *testing.T) {
