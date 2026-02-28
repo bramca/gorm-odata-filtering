@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
@@ -350,7 +351,7 @@ var (
 	}
 )
 
-func PrintTree(query string) (string, error) {
+func GetAST(query string) (syntaxtree.SyntaxTree, error) {
 	tree := syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
 		OperatorParsers:       operatorParsers,
@@ -361,10 +362,10 @@ func PrintTree(query string) (string, error) {
 
 	err := tree.ConstructTree(query)
 	if err != nil {
-		return "", err
+		return syntaxtree.SyntaxTree{}, err
 	}
 
-	return tree.String(), nil
+	return tree, nil
 }
 
 func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
@@ -470,13 +471,13 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			rightChild := root.RightChild
 			queryRightOperandString := ""
 			if rightChild.Type == syntaxtree.UnaryOperator {
-				queryRightOperandString = buildUnaryFuncChain(databaseType, rightChild)
+				return db, &InvalidQueryError{}
 			}
 			if rightChild.Value == "concat" {
-				queryRightOperandString = buildConcat(databaseType, rightChild)
+				return db, &InvalidQueryError{}
 			}
 			if rightChild.Type == syntaxtree.RightOperand {
-				queryRightOperandString = rightChild.Value
+				queryRightOperandString = strings.ReplaceAll(rightChild.Value, "'", "")
 			}
 
 			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
@@ -500,8 +501,12 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 				}
 				db = db.Where(filterMap)
 			} else {
-				queryString := fmt.Sprintf("%s %s %s", queryLeftOperandString, opTranslation[root.Value], queryRightOperandString)
-				db = db.Where(queryString)
+				queryString := fmt.Sprintf("%s %s ?", queryLeftOperandString, opTranslation[root.Value])
+				if queryRightOperandInt, err := strconv.Atoi(queryRightOperandString); err == nil {
+					db = db.Where(queryString, queryRightOperandInt)
+				} else {
+					db = db.Where(queryString, queryRightOperandString)
+				}
 			}
 		case "contains", "startswith", "endswith":
 			// Build up left child
@@ -519,10 +524,15 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 
 			// Build up right child
 			queryRightOperandString := root.RightChild.Value
+			escapeContains := false
 			rightOperandTranslation := map[string]string{
-				"contains":   `'%$1%'`,
-				"startswith": `'$1%'`,
-				"endswith":   `'%$1'`,
+				"contains":   `%$1%`,
+				"startswith": `$1%`,
+				"endswith":   `%$1`,
+			}
+			if strings.Contains(queryRightOperandString, "%") {
+				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "%", "\\%")
+				escapeContains = true
 			}
 
 			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
@@ -545,12 +555,16 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 				}
 				db = db.Where(filterMap)
 			} else {
-				replacementString := "%s LIKE %s"
+				replacementString := "%s LIKE ?"
 				if notEnabled {
-					replacementString = "%s NOT LIKE %s"
+					replacementString = "%s NOT LIKE ?"
 				}
-				queryString := fmt.Sprintf(replacementString, queryLeftOperandString, queryRightOperandString)
-				db = db.Where(queryString)
+
+				if escapeContains {
+					replacementString += " ESCAPE '\\'"
+				}
+				queryString := fmt.Sprintf(replacementString, queryLeftOperandString)
+				db = db.Where(queryString, queryRightOperandString)
 			}
 		}
 	case syntaxtree.UnaryOperator:
