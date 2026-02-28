@@ -45,7 +45,19 @@ func main() {
 	queryString := "name eq 'test' and (contains(testValue,'testvalue') or contains(metadata/name,'test-metadata'))"
 
 	var result []MockModel
+
+	// Without validation
 	dbQuery, err := gormodata.BuildQuery(queryString, db, gormodata.SQLite)
+
+	if err != nil {
+		panic(err)
+	}
+
+	dbQuery.Find(&result)
+
+	// With validation
+	maxTreeDepth = 7
+	dbQuery, err = gormodata.BuildQueryWithValidation(query, db, gormodata.SQLite, MockModel{}, maxTreeDepth)
 
 	if err != nil {
 		panic(err)
