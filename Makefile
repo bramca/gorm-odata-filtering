@@ -13,7 +13,7 @@ test:
 tr: test.report
 test.report:
 	go test ./... --cover -timeout=300s -parallel=64 -coverprofile coverage.out
-	go tool cover -html=coverage.out
+	gocovsh
 
 fmt: ## Format go code
 	@go mod tidy
@@ -22,6 +22,7 @@ fmt: ## Format go code
 tools: ## Install extra tools for development
 	go install mvdan.cc/gofumpt@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/orlangure/gocovsh@latest
 
 lint: ## Lint the code locally
 	golangci-lint run --timeout 600s
