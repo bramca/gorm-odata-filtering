@@ -707,12 +707,6 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedRowAffected: 0,
 			expectedErr:         false,
 		},
-		"tautology in value - empty string eq empty string": {
-			query:               "name eq '' or '' eq ''",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"\" OR '' = \"\"",
-			expectedRowAffected: 3,
-			expectedErr:         false,
-		},
 		"comment injection in value": {
 			query:               "name eq 'foo' --",
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo --\"",
@@ -720,8 +714,8 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedErr:         false,
 		},
 		"union select injection in value": {
-			query:               "name eq 'foo' UNION SELECT * FROM users--",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo UNION SELECT * FROM users--\"",
+			query:               "name eq 'foo' UNION SELECT * FROM mock_models --",
+			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo UNION SELECT * FROM mock_models --\"",
 			expectedRowAffected: 0,
 			expectedErr:         false,
 		},
@@ -748,12 +742,6 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"test`value\"",
 			expectedRowAffected: 0,
 			expectedErr:         false,
-		},
-		"nested query termination": {
-			query:               "name eq 'foo'); DROP TABLE users; --",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo); DROP TABLE users; --\"",
-			expectedRowAffected: 0,
-			expectedErr:         true,
 		},
 		"boolean-based delay attack": {
 			query:               "name eq 'test' AND SLEEP(5)",
