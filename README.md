@@ -56,7 +56,7 @@ func main() {
 	dbQuery.Find(&result)
 
 	// With validation
-	maxTreeDepth = 7
+	maxTreeDepth := 7
 	dbQuery, err = gormodata.BuildQueryWithValidation(query, db, gormodata.SQLite, MockModel{}, maxTreeDepth)
 
 	if err != nil {
