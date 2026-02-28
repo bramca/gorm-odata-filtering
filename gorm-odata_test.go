@@ -9,6 +9,7 @@ import (
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"github.com/test-go/testify/assert"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func ptr[T any](in T) *T {
@@ -91,6 +92,18 @@ func Test_BuildQuery_CorrectQueryForDbType(t *testing.T) {
 			assert.Equal(t, testData.expectedSql, sqlQuery)
 		})
 	}
+}
+
+func Test_BuildQuery_CustomNamingStrategy(t *testing.T) {
+	t.Parallel()
+	t.Cleanup(cleanupCache)
+
+	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+	db.NamingStrategy = schema.NamingStrategy{
+		TablePrefix: "pre_",
+	}
+	_ = db.AutoMigrate(&MockModel{})
+	// Arrange
 }
 
 func Test_BuildQuery_Success(t *testing.T) {

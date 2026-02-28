@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
-	"github.com/stoewer/go-strcase"
 	"github.com/survivorbat/go-tsyncmap"
 	deepgorm "github.com/survivorbat/gorm-deep-filtering"
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 type DbType int
@@ -377,7 +377,232 @@ func GetAST(query string) (syntaxtree.SyntaxTree, error) {
 	return tree, nil
 }
 
+// BuildQuery
+// Builds a gorm query based on an odata query string
+// using the default database naming strategy for translating columns
 func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
+	var err error
+	db, err = checkDbPlugins(db)
+	if err != nil {
+		return db, err
+	}
+
+	tree := syntaxtree.SyntaxTree{
+		OperatorPrecedence:    operatorPrecedence,
+		OperatorParsers:       operatorParsers,
+		BinaryFunctionParsers: binaryFunctionParsers,
+		UnaryFunctionParsers:  unaryFunctionParsers,
+		Separator:             ";",
+	}
+
+	err = tree.ConstructTree(query)
+	if err != nil {
+		return db, err
+	}
+
+	columnTranslationFunc := func(s string) string {
+		return db.NamingStrategy.ColumnName("", s)
+	}
+
+	db, err = buildGormQuery(tree.Root, db, databaseType, operatorTranslation, gormqonvertTranslation, columnTranslationFunc, false)
+
+	return db, err
+}
+
+func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opTranslation map[string]string, gqTranslation map[string]string, columnTranslation func(string) string, notEnabled bool) (*gorm.DB, error) {
+	cleanDB := db.Session(&gorm.Session{NewDB: true})
+	switch root.Type {
+	case syntaxtree.Operator:
+		switch root.Value {
+		case "and":
+			if notEnabled {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled))
+			} else {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled))
+			}
+		case "or":
+			if notEnabled {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled))
+			} else {
+				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, columnTranslation, notEnabled))
+			}
+		case "eq", "ne", "lt", "le", "gt", "ge":
+			// Build up left child
+			leftChild := root.LeftChild
+			queryLeftOperandString := ""
+			if leftChild.Type == syntaxtree.UnaryOperator {
+				queryLeftOperandString = buildUnaryFuncChain(databaseType, columnTranslation, leftChild)
+			}
+			if leftChild.Value == "concat" {
+				queryLeftOperandString = buildConcat(databaseType, columnTranslation, leftChild)
+			}
+			if leftChild.Type == syntaxtree.LeftOperand {
+				queryLeftOperandString = columnTranslation(leftChild.Value)
+			}
+
+			// Build up right child
+			rightChild := root.RightChild
+			queryRightOperandString := ""
+			if rightChild.Type == syntaxtree.UnaryOperator {
+				return db, &InvalidQueryError{}
+			}
+			if rightChild.Value == "concat" {
+				return db, &InvalidQueryError{}
+			}
+			if rightChild.Type == syntaxtree.RightOperand {
+				queryRightOperandString = strings.ReplaceAll(rightChild.Value, "'", "")
+			}
+
+			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
+			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
+			filterMap := map[string]any{}
+			currentMap := filterMap
+			if strings.Contains(leftChild.Value, "/") {
+				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
+				fieldSplit := strings.Split(leftChild.Value, "/")
+				for i, field := range fieldSplit {
+					fieldSnakeCase := columnTranslation(field)
+					if i < len(fieldSplit)-1 {
+						currentMap[fieldSnakeCase] = map[string]any{}
+						currentMap = currentMap[fieldSnakeCase].(map[string]any)
+						continue
+					}
+					currentMap[fieldSnakeCase] = queryRightOperandString
+					if root.Value != "eq" {
+						currentMap[fieldSnakeCase] = gqTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
+					}
+				}
+				db = db.Where(filterMap)
+			} else {
+				queryString := fmt.Sprintf("%s %s ?", queryLeftOperandString, opTranslation[root.Value])
+				if queryRightOperandInt, err := strconv.Atoi(queryRightOperandString); err == nil {
+					db = db.Where(queryString, queryRightOperandInt)
+				} else {
+					db = db.Where(queryString, queryRightOperandString)
+				}
+			}
+		case "contains", "startswith", "endswith":
+			// Build up left child
+			leftChild := root.LeftChild
+			queryLeftOperandString := ""
+			if leftChild.Type == syntaxtree.UnaryOperator {
+				queryLeftOperandString = buildUnaryFuncChain(databaseType, columnTranslation, leftChild)
+			}
+			if leftChild.Value == "concat" {
+				queryLeftOperandString = buildConcat(databaseType, columnTranslation, leftChild)
+			}
+			if leftChild.Type == syntaxtree.LeftOperand {
+				queryLeftOperandString = columnTranslation(leftChild.Value)
+			}
+
+			// Build up right child
+			queryRightOperandString := root.RightChild.Value
+			escapeContains := false
+			rightOperandTranslation := map[string]string{
+				"contains":   `%$1%`,
+				"startswith": `$1%`,
+				"endswith":   `%$1`,
+			}
+			if strings.Contains(queryRightOperandString, "%") {
+				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "%", "\\%")
+				escapeContains = true
+			}
+
+			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
+
+			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
+			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
+			filterMap := map[string]any{}
+			currentMap := filterMap
+			if strings.Contains(leftChild.Value, "/") {
+				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
+				fieldSplit := strings.Split(leftChild.Value, "/")
+				for i, field := range fieldSplit {
+					fieldSnakeCase := columnTranslation(field)
+					if i < len(fieldSplit)-1 {
+						currentMap[fieldSnakeCase] = map[string]any{}
+						currentMap = currentMap[fieldSnakeCase].(map[string]any)
+						continue
+					}
+					currentMap[fieldSnakeCase] = gqTranslation[root.Value] + queryRightOperandString
+				}
+				db = db.Where(filterMap)
+			} else {
+				replacementString := "%s LIKE ?"
+				if notEnabled {
+					replacementString = "%s NOT LIKE ?"
+				}
+
+				if escapeContains {
+					replacementString += " ESCAPE '\\'"
+				}
+				queryString := fmt.Sprintf(replacementString, queryLeftOperandString)
+				db = db.Where(queryString, queryRightOperandString)
+			}
+		}
+	case syntaxtree.UnaryOperator:
+		if root.Value != "not" {
+			return db, &InvalidQueryError{}
+		}
+		var err error
+		db, err = buildGormQuery(root.LeftChild, db, databaseType, operatorTranslationReversed, gormqonvertTranslationReversed, columnTranslation, true)
+		if err != nil {
+			return db, err
+		}
+	default:
+		return db, &InvalidQueryError{}
+	}
+
+	return db, nil
+}
+
+func buildConcat(databaseType DbType, columnTranslation func(string) string, root *syntaxtree.Node) string {
+	result := ""
+	if root.Value == "concat" {
+		result = fmt.Sprintf("%s || %s", buildConcat(databaseType, columnTranslation, root.LeftChild), buildConcat(databaseType, columnTranslation, root.RightChild))
+	}
+	if root.Type == syntaxtree.UnaryOperator {
+		result = buildUnaryFuncChain(databaseType, columnTranslation, root)
+	}
+
+	if root.Type == syntaxtree.LeftOperand {
+		result = root.Value
+		if !strings.Contains(result, "'") {
+			result = columnTranslation(result)
+		}
+	}
+
+	return result
+}
+
+func buildUnaryFuncChain(databaseType DbType, columnTranslation func(string) string, root *syntaxtree.Node) string {
+	result := ""
+	nodesVisited := map[int]bool{}
+	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
+		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryOperator && !nodesVisited[root.LeftChild.Id] {
+			root = root.LeftChild
+			continue
+		}
+		nodesVisited[root.Id] = true
+		if result == "" {
+			if strings.Contains(unaryFunctionTranslation[databaseType][root.Value], "%") {
+				result = fmt.Sprintf(unaryFunctionTranslation[databaseType][root.Value], columnTranslation(root.LeftChild.Value))
+			} else {
+				result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], columnTranslation(root.LeftChild.Value))
+			}
+		} else {
+			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], result)
+		}
+
+		if root.Parent != nil {
+			root = root.Parent
+		}
+	}
+
+	return result
+}
+
+func checkDbPlugins(db *gorm.DB) (*gorm.DB, error) {
 	if _, ok := db.Plugins[deepgorm.New().Name()]; !ok {
 		if err := db.Use(deepgorm.New()); err != nil {
 			return db, err
@@ -427,213 +652,51 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error
 		cacheGormqonvertTranslationMap.Store("gormqonvertTranslation", gormqonvertTranslation)
 		cacheGormqonvertTranslationMap.Store("gormqonvertTranslationReversed", gormqonvertTranslationReversed)
 	}
-	tree := syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
-	}
-
-	err := tree.ConstructTree(query)
-	if err != nil {
-		return db, err
-	}
-
-	db, err = buildGormQuery(tree.Root, db, databaseType, operatorTranslation, gormqonvertTranslation, false)
-
-	return db, err
-}
-
-func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opTranslation map[string]string, gqTranslation map[string]string, notEnabled bool) (*gorm.DB, error) {
-	cleanDB := db.Session(&gorm.Session{NewDB: true})
-	switch root.Type {
-	case syntaxtree.Operator:
-		switch root.Value {
-		case "and":
-			if notEnabled {
-				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
-			} else {
-				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
-			}
-		case "or":
-			if notEnabled {
-				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Where(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
-			} else {
-				db = db.Where(buildGormQuery(root.LeftChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled)).Or(buildGormQuery(root.RightChild, cleanDB, databaseType, opTranslation, gqTranslation, notEnabled))
-			}
-		case "eq", "ne", "lt", "le", "gt", "ge":
-			// Build up left child
-			leftChild := root.LeftChild
-			queryLeftOperandString := ""
-			if leftChild.Type == syntaxtree.UnaryOperator {
-				queryLeftOperandString = buildUnaryFuncChain(databaseType, leftChild)
-			}
-			if leftChild.Value == "concat" {
-				queryLeftOperandString = buildConcat(databaseType, leftChild)
-			}
-			if leftChild.Type == syntaxtree.LeftOperand {
-				queryLeftOperandString = strcase.SnakeCase(leftChild.Value)
-			}
-
-			// Build up right child
-			rightChild := root.RightChild
-			queryRightOperandString := ""
-			if rightChild.Type == syntaxtree.UnaryOperator {
-				return db, &InvalidQueryError{}
-			}
-			if rightChild.Value == "concat" {
-				return db, &InvalidQueryError{}
-			}
-			if rightChild.Type == syntaxtree.RightOperand {
-				queryRightOperandString = strings.ReplaceAll(rightChild.Value, "'", "")
-			}
-
-			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
-			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			filterMap := map[string]any{}
-			currentMap := filterMap
-			if strings.Contains(leftChild.Value, "/") {
-				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
-				fieldSplit := strings.Split(leftChild.Value, "/")
-				for i, field := range fieldSplit {
-					fieldSnakeCase := strcase.SnakeCase(field)
-					if i < len(fieldSplit)-1 {
-						currentMap[fieldSnakeCase] = map[string]any{}
-						currentMap = currentMap[fieldSnakeCase].(map[string]any)
-						continue
-					}
-					currentMap[fieldSnakeCase] = queryRightOperandString
-					if root.Value != "eq" {
-						currentMap[fieldSnakeCase] = gqTranslation[root.Value] + currentMap[fieldSnakeCase].(string)
-					}
-				}
-				db = db.Where(filterMap)
-			} else {
-				queryString := fmt.Sprintf("%s %s ?", queryLeftOperandString, opTranslation[root.Value])
-				if queryRightOperandInt, err := strconv.Atoi(queryRightOperandString); err == nil {
-					db = db.Where(queryString, queryRightOperandInt)
-				} else {
-					db = db.Where(queryString, queryRightOperandString)
-				}
-			}
-		case "contains", "startswith", "endswith":
-			// Build up left child
-			leftChild := root.LeftChild
-			queryLeftOperandString := ""
-			if leftChild.Type == syntaxtree.UnaryOperator {
-				queryLeftOperandString = buildUnaryFuncChain(databaseType, leftChild)
-			}
-			if leftChild.Value == "concat" {
-				queryLeftOperandString = buildConcat(databaseType, leftChild)
-			}
-			if leftChild.Type == syntaxtree.LeftOperand {
-				queryLeftOperandString = strcase.SnakeCase(leftChild.Value)
-			}
-
-			// Build up right child
-			queryRightOperandString := root.RightChild.Value
-			escapeContains := false
-			rightOperandTranslation := map[string]string{
-				"contains":   `%$1%`,
-				"startswith": `$1%`,
-				"endswith":   `%$1`,
-			}
-			if strings.Contains(queryRightOperandString, "%") {
-				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "%", "\\%")
-				escapeContains = true
-			}
-
-			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
-
-			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
-			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
-			filterMap := map[string]any{}
-			currentMap := filterMap
-			if strings.Contains(leftChild.Value, "/") {
-				queryRightOperandString = strings.ReplaceAll(queryRightOperandString, "'", "")
-				fieldSplit := strings.Split(leftChild.Value, "/")
-				for i, field := range fieldSplit {
-					fieldSnakeCase := strcase.SnakeCase(field)
-					if i < len(fieldSplit)-1 {
-						currentMap[fieldSnakeCase] = map[string]any{}
-						currentMap = currentMap[fieldSnakeCase].(map[string]any)
-						continue
-					}
-					currentMap[fieldSnakeCase] = gqTranslation[root.Value] + queryRightOperandString
-				}
-				db = db.Where(filterMap)
-			} else {
-				replacementString := "%s LIKE ?"
-				if notEnabled {
-					replacementString = "%s NOT LIKE ?"
-				}
-
-				if escapeContains {
-					replacementString += " ESCAPE '\\'"
-				}
-				queryString := fmt.Sprintf(replacementString, queryLeftOperandString)
-				db = db.Where(queryString, queryRightOperandString)
-			}
-		}
-	case syntaxtree.UnaryOperator:
-		if root.Value != "not" {
-			return db, &InvalidQueryError{}
-		}
-		var err error
-		db, err = buildGormQuery(root.LeftChild, db, databaseType, operatorTranslationReversed, gormqonvertTranslationReversed, true)
-		if err != nil {
-			return db, err
-		}
-	default:
-		return db, &InvalidQueryError{}
-	}
 
 	return db, nil
 }
 
-func buildConcat(databaseType DbType, root *syntaxtree.Node) string {
-	result := ""
-	if root.Value == "concat" {
-		result = fmt.Sprintf("%s || %s", buildConcat(databaseType, root.LeftChild), buildConcat(databaseType, root.RightChild))
-	}
-	if root.Type == syntaxtree.UnaryOperator {
-		result = buildUnaryFuncChain(databaseType, root)
+func tableName(input any, db *gorm.DB) string {
+	tabler, ok := input.(schema.Tabler)
+	if ok {
+		return tabler.TableName()
 	}
 
-	if root.Type == syntaxtree.LeftOperand {
-		result = root.Value
-		if !strings.Contains(result, "'") {
-			result = strcase.SnakeCase(result)
-		}
-	}
-
-	return result
+	typeOf := reflect.TypeOf(input)
+	return db.NamingStrategy.TableName(typeOf.Name())
 }
 
-func buildUnaryFuncChain(databaseType DbType, root *syntaxtree.Node) string {
-	result := ""
-	nodesVisited := map[int]bool{}
-	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
-		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryOperator && !nodesVisited[root.LeftChild.Id] {
-			root = root.LeftChild
-			continue
-		}
-		nodesVisited[root.Id] = true
-		if result == "" {
-			if strings.Contains(unaryFunctionTranslation[databaseType][root.Value], "%") {
-				result = fmt.Sprintf(unaryFunctionTranslation[databaseType][root.Value], strcase.SnakeCase(root.LeftChild.Value))
-			} else {
-				result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], strcase.SnakeCase(root.LeftChild.Value))
-			}
-		} else {
-			result = fmt.Sprintf("%s(%s)", unaryFunctionTranslation[databaseType][root.Value], result)
+func columnNamesMap(input any, db *gorm.DB) map[string]string {
+	tableName := tableName(input, db)
+	typeOf := reflect.TypeOf(input)
+	flds := typeOf.NumField()
+	res := make(map[string]string, flds)
+	for i := range flds {
+		fld := typeOf.Field(i)
+		name := fld.Name
+
+		jsonName := name
+		if tag := fld.Tag.Get("json"); tag != "" && tag != "-" {
+			jsonName, _, _ = strings.Cut(tag, ",")
 		}
 
-		if root.Parent != nil {
-			root = root.Parent
+		var gormName string
+		if tag := fld.Tag.Get("gorm"); tag != "" {
+			for _, setting := range strings.Split(tag, ";") {
+				if !strings.HasPrefix(setting, "column:") {
+					continue
+				}
+
+				gormName = strings.TrimPrefix(setting, "column:")
+			}
 		}
+
+		if gormName == "" {
+			gormName = db.NamingStrategy.ColumnName(tableName, name)
+		}
+
+		res[jsonName] = gormName
 	}
 
-	return result
+	return res
 }
