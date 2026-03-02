@@ -51,9 +51,9 @@ func main() {
 		db,
 		gormodata.SQLite,
 		// Optional validations
-		gormodata.WithInputModelValidation(testData.queryString, MockModel{}, db),
-		gormodata.WithMaxTreeDepth(testData.queryString, 5, db),
-		gormodata.WithMaxObjectExpansion(testData.queryString, 2, db),
+		gormodata.WithInputModelValidation(queryString, MockModel{}, db),
+		gormodata.WithMaxTreeDepth(queryString, 5, db),
+		gormodata.WithMaxObjectExpansion(queryString, 2, db),
 	)
 
 	if err != nil {
