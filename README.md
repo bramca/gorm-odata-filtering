@@ -46,18 +46,15 @@ func main() {
 
 	var result []MockModel
 
-	// Without validation
-	dbQuery, err := gormodata.BuildQuery(queryString, db, gormodata.SQLite)
-
-	if err != nil {
-		panic(err)
-	}
-
-	dbQuery.Find(&result)
-
-	// With validation
-	maxTreeDepth := 7
-	dbQuery, err = gormodata.BuildQueryWithValidation(query, db, gormodata.SQLite, MockModel{}, maxTreeDepth)
+	dbQuery, err := gormodata.BuildQuery(
+		queryString,
+		db,
+		gormodata.SQLite,
+		// Optional validations
+		gormodata.WithInputModelValidation(testData.queryString, MockModel{}, db),
+		gormodata.WithMaxTreeDepth(testData.queryString, 5, db),
+		gormodata.WithMaxObjectExpansion(testData.queryString, 2, db),
+	)
 
 	if err != nil {
 		panic(err)

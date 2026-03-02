@@ -866,31 +866,35 @@ func Test_BuildQueryWithValidation_ErrorOnInvalidQuery(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
 
+	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
+	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
+
 	tests := map[string]struct {
 		query          string
-		maxTreeDepth   int
+		validationFunc QueryValidation
 		expectedErrMsg string
 	}{
-		"max tree depth exceeded": {
-			query:          "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
-			maxTreeDepth:   2,
-			expectedErrMsg: "invalid query: maximum query complexity exceeded: 3 > 2",
+		"error on wrong column": {
+			query:          "contains(testValue,'test') or contains(toupper(name),'NAME') and test or contains(tolower(value),'test')",
+			validationFunc: WithInputModelValidation("contains(testValue,'test') or contains(toupper(name),'NAME') and test or contains(tolower(value),'test')", MockModel{}, db),
+			expectedErrMsg: "invalid query: unknown column name 'value'",
 		},
 		"error on max tree depth": {
 			query:          "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
-			maxTreeDepth:   2,
-			expectedErrMsg: "invalid query: maximum query complexity exceeded: 3 > 2",
+			validationFunc: WithMaxTreeDepth("contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')", 2, db),
+			expectedErrMsg: "invalid query: maximum query complexity exceeded: >2",
+		},
+		"error on max object expansion depth": {
+			query:          "contains(tolower(testValue),'test') or startswith(metadata/tag/value,'test-2')",
+			validationFunc: WithMaxObjectExpansion("contains(tolower(testValue),'test') or startswith(metadata/tag/value,'test-2')", 2, db),
+			expectedErrMsg: "invalid query: query contains value 'metadata/tag/value' that exceeds the maximum allowed object expansion depth: >2",
 		},
 	}
 
 	for name, data := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
-			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
-			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
-
 			// Act
-			_, err := BuildQueryWithValidation(data.query, db, SQLite, MockModel{}, data.maxTreeDepth)
+			_, err := BuildQuery(data.query, db, SQLite, data.validationFunc)
 
 			// Assert
 			assert.Error(t, err)
@@ -1125,7 +1129,14 @@ func Test_BuildQueryWithValidation_Success(t *testing.T) {
 				return dbQuery.Find(&MockModel{})
 			})
 
-			dbQuery, err = BuildQueryWithValidation(testData.queryString, db, SQLite, MockModel{}, 7)
+			dbQuery, err = BuildQuery(
+				testData.queryString,
+				db,
+				SQLite,
+				WithInputModelValidation(testData.queryString, MockModel{}, db),
+				WithMaxTreeDepth(testData.queryString, 7, db),
+				WithMaxObjectExpansion(testData.queryString, 2, db),
+			)
 
 			queryResult := dbQuery.Find(&result)
 
@@ -1185,58 +1196,6 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 			assert.Equal(t, err.Error(), testData.expectedErrMsg)
 		})
 	}
-}
-
-func Test_ValidQuery_ReturnsError(t *testing.T) {
-	t.Parallel()
-	t.Cleanup(cleanupCache)
-	tests := map[string]struct {
-		queryString    string
-		maxTreeDepth   int
-		expectedErrMsg string
-	}{
-		"error on wrong column": {
-			queryString:    "contains(testValue,'test') or contains(toupper(name),'NAME') and test or contains(tolower(value),'test')",
-			maxTreeDepth:   0,
-			expectedErrMsg: "invalid query: unknown column name 'value'",
-		},
-		"error on max tree depth": {
-			queryString:    "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
-			maxTreeDepth:   2,
-			expectedErrMsg: "invalid query: maximum query complexity exceeded: 3 > 2",
-		},
-	}
-
-	for name, data := range tests {
-		t.Run(name, func(t *testing.T) {
-			// Arrange
-			db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
-			_ = db.AutoMigrate(&MockModel{}, &Metadata{})
-
-			// Act
-			err := ValidQuery(data.queryString, MockModel{}, data.maxTreeDepth, db)
-
-			// Assert
-			assert.Error(t, err)
-			assert.Equal(t, data.expectedErrMsg, err.Error())
-		})
-	}
-}
-
-func Test_ValidQuery_ReturnsNoError(t *testing.T) {
-	t.Parallel()
-	t.Cleanup(cleanupCache)
-
-	// Arrange
-	db := gormtestutil.NewMemoryDatabase(t, gormtestutil.WithName(t.Name()))
-	_ = db.AutoMigrate(&MockModel{}, &Metadata{})
-	queryString := "contains(concat(testValue,name),'prd') or concat(name,concat(' ',concat('length ',length(tolower(testValue))))) eq 'test length 12'"
-
-	// Act
-	err := ValidQuery(queryString, MockModel{}, 0, db)
-
-	// Assert
-	assert.NoError(t, err)
 }
 
 func Test_GetAST_Success(t *testing.T) {
