@@ -19,6 +19,7 @@ To make sure that object expansion works (e.g. `metadata/name eq 'some-value'`) 
 package main
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
