@@ -876,17 +876,17 @@ func Test_BuildQueryWithValidation_ErrorOnInvalidQuery(t *testing.T) {
 	}{
 		"error on wrong column": {
 			query:          "contains(testValue,'test') or contains(toupper(name),'NAME') and test or contains(tolower(value),'test')",
-			validationFunc: WithInputModelValidation("contains(testValue,'test') or contains(toupper(name),'NAME') and test or contains(tolower(value),'test')", MockModel{}, db),
+			validationFunc: WithInputModelValidation(MockModel{}),
 			expectedErrMsg: "invalid query: unknown column name 'value'",
 		},
 		"error on max tree depth": {
 			query:          "contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')",
-			validationFunc: WithMaxTreeDepth("contains(tolower(testValue),'test') or contains(concat(toupper(name),length(name)),'name4')", 2, db),
+			validationFunc: WithMaxTreeDepth(2),
 			expectedErrMsg: "invalid query: maximum query complexity exceeded: >2",
 		},
 		"error on max object expansion depth": {
 			query:          "contains(tolower(testValue),'test') or startswith(metadata/tag/value,'test-2')",
-			validationFunc: WithMaxObjectExpansion("contains(tolower(testValue),'test') or startswith(metadata/tag/value,'test-2')", 2, db),
+			validationFunc: WithMaxObjectExpansion(2),
 			expectedErrMsg: "invalid query: query contains value 'metadata/tag/value' that exceeds the maximum allowed object expansion depth: >2",
 		},
 	}
@@ -1133,9 +1133,9 @@ func Test_BuildQueryWithValidation_Success(t *testing.T) {
 				testData.queryString,
 				db,
 				SQLite,
-				WithInputModelValidation(testData.queryString, MockModel{}, db),
-				WithMaxTreeDepth(testData.queryString, 7, db),
-				WithMaxObjectExpansion(testData.queryString, 2, db),
+				WithInputModelValidation(MockModel{}),
+				WithMaxTreeDepth(7),
+				WithMaxObjectExpansion(2),
 			)
 
 			queryResult := dbQuery.Find(&result)

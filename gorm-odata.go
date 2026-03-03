@@ -353,7 +353,7 @@ var (
 	}
 )
 
-type QueryValidation func(tree *syntaxtree.SyntaxTree) error
+type QueryValidation func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error
 
 // PrintTree
 // Get a printable version of the abstract syntax tree for a given query
@@ -387,8 +387,8 @@ func GetAST(query string) (*syntaxtree.SyntaxTree, error) {
 
 // WithInputModelValidation
 // returns a QueryValidation function that validates the input query against an input gorm model
-func WithInputModelValidation(query string, input any, db *gorm.DB) QueryValidation {
-	return func(tree *syntaxtree.SyntaxTree) error {
+func WithInputModelValidation(input any) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
 		columnNamesList := columnNames(input, db.NamingStrategy)
 
 		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
@@ -414,8 +414,8 @@ func WithInputModelValidation(query string, input any, db *gorm.DB) QueryValidat
 
 // WithMaxTreeDepth
 // returns a QueryValidation function that checks max tree depth of the parsed query
-func WithMaxTreeDepth(query string, maxTreeDepth int, db *gorm.DB) QueryValidation {
-	return func(tree *syntaxtree.SyntaxTree) error {
+func WithMaxTreeDepth(maxTreeDepth int) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
 		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
 			if depth > maxTreeDepth {
 				return &InvalidQueryError{
@@ -434,8 +434,8 @@ func WithMaxTreeDepth(query string, maxTreeDepth int, db *gorm.DB) QueryValidati
 // returns a QueryValidation function that checks queries with object expansion (e.g. model/prop/value/...)
 //
 // for maximum object expansion depth
-func WithMaxObjectExpansion(query string, maxObjectExpansion int, db *gorm.DB) QueryValidation {
-	return func(tree *syntaxtree.SyntaxTree) error {
+func WithMaxObjectExpansion(maxObjectExpansion int) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
 		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
 			if strings.Contains(currentNode.Value, "/") {
 				splitName := strings.Split(currentNode.Value, "/")
@@ -480,7 +480,7 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations
 	}
 
 	for _, validationCheck := range queryValidations {
-		if err := validationCheck(tree); err != nil {
+		if err := validationCheck(tree, db); err != nil {
 			return db, err
 		}
 	}
