@@ -353,10 +353,14 @@ var (
 	}
 )
 
+// QueryValidation
+// is a type that can be used in the BuildQuery function to do some
+//
+// validations before building the gorm query
 type QueryValidation func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error
 
 // PrintTree
-// Get a printable version of the abstract syntax tree for a given query
+// to get a printable version of the abstract syntax tree for a given query
 func PrintTree(query string) (string, error) {
 	tree, err := GetAST(query)
 	if err != nil {
@@ -367,7 +371,7 @@ func PrintTree(query string) (string, error) {
 }
 
 // GetAST
-// Get the full abstract syntaxtree for a given query
+// to get the full abstract syntaxtree for a given query
 func GetAST(query string) (*syntaxtree.SyntaxTree, error) {
 	tree := &syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
@@ -386,7 +390,7 @@ func GetAST(query string) (*syntaxtree.SyntaxTree, error) {
 }
 
 // WithInputModelValidation
-// returns a QueryValidation function that validates the input query against an input gorm model
+// returns a QueryValidation function that validates the input query against the input gorm model that needs to be filtered
 func WithInputModelValidation(input any) QueryValidation {
 	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
 		columnNamesList := columnNames(input, db.NamingStrategy)
@@ -413,7 +417,7 @@ func WithInputModelValidation(input any) QueryValidation {
 }
 
 // WithMaxTreeDepth
-// returns a QueryValidation function that checks max tree depth of the parsed query
+// returns a QueryValidation function that checks maximum syntax tree depth of the parsed query
 func WithMaxTreeDepth(maxTreeDepth int) QueryValidation {
 	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
 		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
@@ -454,11 +458,11 @@ func WithMaxObjectExpansion(maxObjectExpansion int) QueryValidation {
 }
 
 // BuildQuery
-// Builds a gorm query based on an odata query string
+// builds a gorm query based on an odata query string
 //
-// You can add optional query validations from this package (see WithInputModelValidation, WithMaxObjectExpansion, WithMaxTreeDepth)
+// You can add optional query validations from this package (see WithInputModelValidation, WithMaxObjectExpansion...)
 //
-// Or add your custom validation functions -> func(tree *syntaxtree) error
+// Or add your custom validation functions -> type QueryValidtion
 func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations ...QueryValidation) (*gorm.DB, error) {
 	var err error
 	db, err = checkDbPlugins(db)
@@ -479,8 +483,8 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations
 		return db, err
 	}
 
-	for _, validationCheck := range queryValidations {
-		if err := validationCheck(tree, db); err != nil {
+	for _, validateQuery := range queryValidations {
+		if err := validateQuery(tree, db); err != nil {
 			return db, err
 		}
 	}
