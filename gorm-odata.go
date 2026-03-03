@@ -353,8 +353,14 @@ var (
 	}
 )
 
+// QueryValidation
+// is a type that can be used in the BuildQuery function to do some
+//
+// validations before building the gorm query
+type QueryValidation func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error
+
 // PrintTree
-// Get a printable version of the abstract syntax tree for a given query
+// to get a printable version of the abstract syntax tree for a given query
 func PrintTree(query string) (string, error) {
 	tree, err := GetAST(query)
 	if err != nil {
@@ -365,9 +371,9 @@ func PrintTree(query string) (string, error) {
 }
 
 // GetAST
-// Get the full abstract syntaxtree for a given query
-func GetAST(query string) (syntaxtree.SyntaxTree, error) {
-	tree := syntaxtree.SyntaxTree{
+// to get the full abstract syntaxtree for a given query
+func GetAST(query string) (*syntaxtree.SyntaxTree, error) {
+	tree := &syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
 		OperatorParsers:       operatorParsers,
 		BinaryFunctionParsers: binaryFunctionParsers,
@@ -377,92 +383,94 @@ func GetAST(query string) (syntaxtree.SyntaxTree, error) {
 
 	err := tree.ConstructTree(query)
 	if err != nil {
-		return syntaxtree.SyntaxTree{}, err
+		return nil, err
 	}
 
 	return tree, nil
 }
 
-// ValidQuery
-// Validates input query against an input gorm model
-//   - checks max tree depth if set > 0
-//   - checks left operands for being existing column names
-func ValidQuery(query string, input any, maxTreeDepth int, db *gorm.DB) error {
-	columnNamesList := columnNames(input, db.NamingStrategy)
-	tree := syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
-	}
+// WithInputModelValidation
+// returns a QueryValidation function that validates the input query against the input gorm model that needs to be filtered
+func WithInputModelValidation(input any) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
+		columnNamesList := columnNames(input, db.NamingStrategy)
 
-	err := tree.ConstructTree(query)
-	if err != nil {
-		return err
-	}
+		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
+			if currentNode.Type == syntaxtree.LeftOperand && currentNode.Parent.Value != "concat" {
+				columnName := db.NamingStrategy.ColumnName("", currentNode.Value)
+				if strings.Contains(columnName, "/") {
+					splitName := strings.Split(columnName, "/")
+					columnName = splitName[0]
+				}
+				if !slices.Contains(columnNamesList, columnName) {
+					return &InvalidQueryError{
+						Msg: fmt.Sprintf("unknown column name '%s'", columnName),
+					}
+				}
+			}
 
-	return validateQuery(tree, maxTreeDepth, columnNamesList, db.NamingStrategy)
+			return nil
+		}
+
+		return validateQueryDepthFirstSearch(tree, validationCheck)
+	}
 }
 
-// BuildQueryWithValidation
-// Builds a gorm query based on an odata query string
-// with extra pre-validation on the input query.
+// WithMaxTreeDepth
+// returns a QueryValidation function that checks maximum syntax tree depth of the parsed query
+func WithMaxTreeDepth(maxTreeDepth int) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
+		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
+			if depth > maxTreeDepth {
+				return &InvalidQueryError{
+					Msg: fmt.Sprintf("maximum query complexity exceeded: >%d", maxTreeDepth),
+				}
+			}
+
+			return nil
+		}
+
+		return validateQueryDepthFirstSearch(tree, validationCheck)
+	}
+}
+
+// WithMaxObjectExpansion
+// returns a QueryValidation function that checks queries with object expansion (e.g. model/prop/value/...)
 //
-// It validates input query against an input gorm model
-//   - checks max tree depth if set > 0
-//   - checks left operands for being existing column names
-func BuildQueryWithValidation(query string, db *gorm.DB, databaseType DbType, input any, maxTreeDepth int) (*gorm.DB, error) {
-	var err error
-	db, err = checkDbPlugins(db)
-	if err != nil {
-		return db, err
+// for maximum object expansion depth
+func WithMaxObjectExpansion(maxObjectExpansion int) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
+		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
+			if strings.Contains(currentNode.Value, "/") {
+				splitName := strings.Split(currentNode.Value, "/")
+				if len(splitName) > maxObjectExpansion {
+					return &InvalidQueryError{
+						Msg: fmt.Sprintf("query contains value '%s' that exceeds the maximum allowed object expansion depth: >%d", currentNode.Value, maxObjectExpansion),
+					}
+				}
+			}
+
+			return nil
+		}
+
+		return validateQueryDepthFirstSearch(tree, validationCheck)
 	}
-
-	tree := syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
-	}
-
-	err = tree.ConstructTree(query)
-	if err != nil {
-		return db, err
-	}
-
-	columnNamesList := columnNames(input, db.NamingStrategy)
-
-	err = validateQuery(tree, maxTreeDepth, columnNamesList, db.NamingStrategy)
-	if err != nil {
-		return db, err
-	}
-
-	columnTranslationFunc := func(s string) string {
-		return db.NamingStrategy.ColumnName("", s)
-	}
-
-	db, err = buildGormQuery(tree.Root, db, databaseType, operatorTranslation, gormqonvertTranslation, columnTranslationFunc, false)
-
-	return db, err
 }
 
 // BuildQuery
-// Builds a gorm query based on an odata query string
-// using the default database naming strategy for translating columns
+// builds a gorm query based on an odata query string
 //
-// WARNING: this function does not validate the input query against the input gorm model.
+// You can add optional query validations from this package (see WithInputModelValidation, WithMaxObjectExpansion...)
 //
-// It is advised to use either the ValidQuery function before or the BuildQueryWithValidation instead
-func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error) {
+// Or add your custom validation functions -> type QueryValidtion
+func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations ...QueryValidation) (*gorm.DB, error) {
 	var err error
 	db, err = checkDbPlugins(db)
 	if err != nil {
 		return db, err
 	}
 
-	tree := syntaxtree.SyntaxTree{
+	tree := &syntaxtree.SyntaxTree{
 		OperatorPrecedence:    operatorPrecedence,
 		OperatorParsers:       operatorParsers,
 		BinaryFunctionParsers: binaryFunctionParsers,
@@ -473,6 +481,12 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType) (*gorm.DB, error
 	err = tree.ConstructTree(query)
 	if err != nil {
 		return db, err
+	}
+
+	for _, validateQuery := range queryValidations {
+		if err := validateQuery(tree, db); err != nil {
+			return db, err
+		}
 	}
 
 	columnTranslationFunc := func(s string) string {
@@ -739,15 +753,15 @@ func checkDbPlugins(db *gorm.DB) (*gorm.DB, error) {
 	return db, nil
 }
 
-func validateQuery(tree syntaxtree.SyntaxTree, maxTreeDepth int, columnNamesList []string, schemaNamer schema.Namer) error {
+func validateQueryDepthFirstSearch(tree *syntaxtree.SyntaxTree, validationChecks ...func(depth int, currentNode *syntaxtree.Node) error) error {
 	depth := 0
 	currentNode := tree.Root
 	nodesVisited := map[int]bool{}
 
 	for !nodesVisited[currentNode.Id] {
-		if maxTreeDepth > 0 && depth > maxTreeDepth {
-			return &InvalidQueryError{
-				Msg: fmt.Sprintf("maximum query complexity exceeded: %d > %d", depth, maxTreeDepth),
+		for _, validationCheck := range validationChecks {
+			if err := validationCheck(depth, currentNode); err != nil {
+				return err
 			}
 		}
 		if currentNode.Type == syntaxtree.Operator || currentNode.Type == syntaxtree.UnaryOperator {
@@ -764,19 +778,6 @@ func validateQuery(tree syntaxtree.SyntaxTree, maxTreeDepth int, columnNamesList
 				continue
 			}
 
-		}
-
-		if currentNode.Type == syntaxtree.LeftOperand && currentNode.Parent.Value != "concat" {
-			columnName := schemaNamer.ColumnName("", currentNode.Value)
-			if strings.Contains(columnName, "/") {
-				splitName := strings.Split(columnName, "/")
-				columnName = splitName[0]
-			}
-			if !slices.Contains(columnNamesList, columnName) {
-				return &InvalidQueryError{
-					Msg: fmt.Sprintf("unknown column name '%s'", columnName),
-				}
-			}
 		}
 
 		nodesVisited[currentNode.Id] = true

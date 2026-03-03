@@ -19,6 +19,7 @@ To make sure that object expansion works (e.g. `metadata/name eq 'some-value'`) 
 package main
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
@@ -46,18 +47,15 @@ func main() {
 
 	var result []MockModel
 
-	// Without validation
-	dbQuery, err := gormodata.BuildQuery(queryString, db, gormodata.SQLite)
-
-	if err != nil {
-		panic(err)
-	}
-
-	dbQuery.Find(&result)
-
-	// With validation
-	maxTreeDepth := 7
-	dbQuery, err = gormodata.BuildQueryWithValidation(query, db, gormodata.SQLite, MockModel{}, maxTreeDepth)
+	dbQuery, err := gormodata.BuildQuery(
+		queryString,
+		db,
+		gormodata.SQLite,
+		// Optional validations
+		gormodata.WithInputModelValidation(MockModel{}),
+		gormodata.WithMaxTreeDepth(5),
+		gormodata.WithMaxObjectExpansion(2),
+	)
 
 	if err != nil {
 		panic(err)
