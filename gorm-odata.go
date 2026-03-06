@@ -601,7 +601,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 				escapeContains = true
 			}
 
-			queryRightOperandString = regexp.MustCompile(`'(.*)'`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
+			queryRightOperandString = regexp.MustCompile(`\s*'(.*)'\s*`).ReplaceAllString(queryRightOperandString, rightOperandTranslation[root.Value])
 
 			// If the leftoperand contains an expansion token ('/') then it should create a map according to this format
 			// Needs gorm-deep-filtering (https://github.com/survivorbat/gorm-deep-filtering) enabled and gorm-query-qonvert (https://github.com/survivorbat/gorm-query-convert)
