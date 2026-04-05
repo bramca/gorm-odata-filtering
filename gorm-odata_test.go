@@ -302,6 +302,77 @@ func Test_BuildQuery_Success(t *testing.T) {
 				},
 			},
 		},
+		"simple query string array multibyte string": {
+			records: []*MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					TestValues: []string{
+						"value1",
+						"vâlué2",
+					},
+				},
+				{
+					ID:        uuid.MustParse("d8c9b566-f711-4113-8a86-a07fa470e43a"),
+					Name:      "prd",
+					TestValue: "accvalue",
+					TestValues: []string{
+						"value3",
+						"value4",
+					},
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					TestValues: []string{
+						"value3",
+						"vâlué2",
+					},
+				},
+				{
+					ID:        uuid.MustParse("96954f52-f87c-4ec2-9af5-3e13642bdc83"),
+					Name:      "test",
+					TestValue: "some-testvalue-1",
+					TestValues: []string{
+						"value4",
+						"value5",
+					},
+				},
+				{
+					ID:        uuid.MustParse("eab8118c-45e9-4848-a380-ed6d981f2338"),
+					Name:      "test",
+					TestValue: "someaccvalue",
+					TestValues: []string{
+						"value6",
+						"value7",
+					},
+				},
+			},
+			queryString: "contains(testValues, 'vâlué2')",
+			expectedSql: "SELECT * FROM `mock_models` WHERE test_values LIKE \"%vâlué2%\"",
+			expectedResult: []MockModel{
+				{
+					ID:        uuid.MustParse("885b50a8-f2d2-4fc2-b8e8-4db54f5ef5b6"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					TestValues: []string{
+						"value1",
+						"vâlué2",
+					},
+				},
+				{
+					ID:        uuid.MustParse("87e8ed33-512d-4482-b639-e0830a19b653"),
+					Name:      "test",
+					TestValue: "prdvalue",
+					TestValues: []string{
+						"value3",
+						"vâlué2",
+					},
+				},
+			},
+		},
 		"simple query unary function chain": {
 			records: []*MockModel{
 				{
