@@ -159,197 +159,60 @@ var (
 		},
 	}
 
-	operatorPrecedence = []string{
-		"not",
-		"length",
-		"indexof",
-		"tolower",
-		"toupper",
-		"trim",
-		"year",
-		"month",
-		"day",
-		"hour",
-		"minute",
-		"second",
-		"fractionalsecond",
-		"date",
-		"time",
-		"now",
-		"round",
-		"floor",
-		"ceiling",
-		"concat",
-		"contains",
-		"endswith",
-		"startswith",
-		"eq",
-		"ne",
-		"gt",
-		"ge",
-		"lt",
-		"le",
-		"and",
-		"or",
-	}
-	operatorParsers = []syntaxtree.OperatorParser{
-		{
-			OperatorString:  "eq",
-			OperatorPattern: regexp.MustCompile(`(.*?) eq (.*?)`),
+	odataLexer = &syntaxtree.Lexer{
+		BinaryOperators: []string{
+			"eq",
+			"ne",
+			"gt",
+			"ge",
+			"lt",
+			"le",
+			"and",
+			"or",
 		},
-		{
-			OperatorString:  "ne",
-			OperatorPattern: regexp.MustCompile(`(.*?) ne (.*?)`),
+		BinaryFunctions: []string{
+			"concat",
+			"contains",
+			"endswith",
+			"startswith",
 		},
-		{
-			OperatorString:  "gt",
-			OperatorPattern: regexp.MustCompile(`(.*?) gt (.*?)`),
+		UnaryFunctions: []string{
+			"not",
+			"length",
+			"indexof",
+			"tolower",
+			"toupper",
+			"trim",
+			"year",
+			"month",
+			"day",
+			"hour",
+			"minute",
+			"second",
+			"fractionalsecond",
+			"date",
+			"time",
+			"now",
+			"round",
+			"floor",
+			"ceiling",
 		},
-		{
-			OperatorString:  "ge",
-			OperatorPattern: regexp.MustCompile(`(.*?) ge (.*?)`),
-		},
-		{
-			OperatorString:  "lt",
-			OperatorPattern: regexp.MustCompile(`(.*?) lt (.*?)`),
-		},
-		{
-			OperatorString:  "le",
-			OperatorPattern: regexp.MustCompile(`(.*?) le (.*?)`),
-		},
-		{
-			OperatorString:  "and",
-			OperatorPattern: regexp.MustCompile(`(.*?) and (.*?)`),
-		},
-		{
-			OperatorString:  "or",
-			OperatorPattern: regexp.MustCompile(`(.*?) or (.*?)`),
-		},
+		OpenDelimiter:             '(',
+		CloseDelimiter:            ')',
+		BinaryFunctionOpSeparator: ',',
+		StringDelimiter:           '\'',
+		TokenSeparator:            ' ',
 	}
 
-	binaryFunctionParsers = []syntaxtree.BinaryFunctionParser{
-		{
-			FunctionName:     "concat",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-		{
-			FunctionName:     "contains",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-		{
-			FunctionName:     "endswith",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-		{
-			FunctionName:     "startswith",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-	}
-
-	unaryFunctionParsers = []syntaxtree.UnaryFunctionParser{
-		{
-			FunctionName:     "not",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "length",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "indexof",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "tolower",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "toupper",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "trim",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "year",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "month",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "day",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "hour",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "minute",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "second",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "fractionalsecond",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "date",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "time",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "now",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "round",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "floor",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "ceiling",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
+	odataPrecedence = map[string]int{
+		"or":  1,
+		"and": 2,
+		"eq":  3,
+		"ne":  3,
+		"gt":  3,
+		"ge":  3,
+		"lt":  3,
+		"le":  3,
 	}
 )
 
@@ -374,14 +237,11 @@ func PrintTree(query string) (string, error) {
 // to get the full abstract syntaxtree for a given query
 func GetAST(query string) (*syntaxtree.SyntaxTree, error) {
 	tree := &syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
+		Lexer:       odataLexer,
+		Precendence: odataPrecedence,
 	}
 
-	err := tree.ConstructTree(query)
+	err := tree.BuildTree(query)
 	if err != nil {
 		return nil, err
 	}
@@ -470,15 +330,7 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations
 		return db, err
 	}
 
-	tree := &syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
-	}
-
-	err = tree.ConstructTree(query)
+	tree, err := GetAST(query)
 	if err != nil {
 		return db, err
 	}
@@ -519,7 +371,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			// Build up left child
 			leftChild := root.LeftChild
 			queryLeftOperandString := ""
-			if leftChild.Type == syntaxtree.UnaryOperator {
+			if leftChild.Type == syntaxtree.UnaryFunction {
 				queryLeftOperandString = buildUnaryFuncChain(databaseType, columnTranslation, leftChild)
 			}
 			if leftChild.Value == "concat" {
@@ -532,7 +384,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			// Build up right child
 			rightChild := root.RightChild
 			queryRightOperandString := ""
-			if rightChild.Type == syntaxtree.UnaryOperator {
+			if rightChild.Type == syntaxtree.UnaryFunction {
 				return db, &InvalidQueryError{
 					Msg: "unary operators not supported as right operand of equality operators",
 				}
@@ -578,7 +430,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			// Build up left child
 			leftChild := root.LeftChild
 			queryLeftOperandString := ""
-			if leftChild.Type == syntaxtree.UnaryOperator {
+			if leftChild.Type == syntaxtree.UnaryFunction {
 				queryLeftOperandString = buildUnaryFuncChain(databaseType, columnTranslation, leftChild)
 			}
 			if leftChild.Value == "concat" {
@@ -633,7 +485,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 				db = db.Where(queryString, queryRightOperandString)
 			}
 		}
-	case syntaxtree.UnaryOperator:
+	case syntaxtree.UnaryFunction:
 		if root.Value != "not" {
 			return db, &InvalidQueryError{
 				Msg: "root level operators other then 'not' are not supported",
@@ -658,7 +510,7 @@ func buildConcat(databaseType DbType, columnTranslation func(string) string, roo
 	if root.Value == "concat" {
 		result = fmt.Sprintf("%s || %s", buildConcat(databaseType, columnTranslation, root.LeftChild), buildConcat(databaseType, columnTranslation, root.RightChild))
 	}
-	if root.Type == syntaxtree.UnaryOperator {
+	if root.Type == syntaxtree.UnaryFunction {
 		result = buildUnaryFuncChain(databaseType, columnTranslation, root)
 	}
 
@@ -675,8 +527,8 @@ func buildConcat(databaseType DbType, columnTranslation func(string) string, roo
 func buildUnaryFuncChain(databaseType DbType, columnTranslation func(string) string, root *syntaxtree.Node) string {
 	result := ""
 	nodesVisited := map[int]bool{}
-	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
-		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryOperator && !nodesVisited[root.LeftChild.Id] {
+	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryFunction {
+		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryFunction && !nodesVisited[root.LeftChild.Id] {
 			root = root.LeftChild
 			continue
 		}
@@ -764,7 +616,7 @@ func validateQueryDepthFirstSearch(tree *syntaxtree.SyntaxTree, validationChecks
 				return err
 			}
 		}
-		if currentNode.Type == syntaxtree.Operator || currentNode.Type == syntaxtree.UnaryOperator {
+		if currentNode.Type == syntaxtree.Operator || currentNode.Type == syntaxtree.UnaryFunction {
 			if currentNode.LeftChild != nil && !nodesVisited[currentNode.LeftChild.Id] {
 				currentNode = currentNode.LeftChild
 				depth += 1

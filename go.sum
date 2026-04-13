@@ -1,5 +1,9 @@
 github.com/bramca/go-syntax-tree v0.0.5 h1:RutwRDQcTD42rHKUQx++Ofu+cQju7sdKR5XRzOA7GHQ=
 github.com/bramca/go-syntax-tree v0.0.5/go.mod h1:S6voFyIgKuuRLGcgaG4jeD0SH8AtOGBiYqwwY86lupU=
+github.com/bramca/go-syntax-tree v0.0.6-0.20260412213120-0a264bdc1658 h1:hh49VTXOs8ZfFLnScxrJb4XDsmII/tJ8Bfng6fMxXQo=
+github.com/bramca/go-syntax-tree v0.0.6-0.20260412213120-0a264bdc1658/go.mod h1:S6voFyIgKuuRLGcgaG4jeD0SH8AtOGBiYqwwY86lupU=
+github.com/bramca/go-syntax-tree v0.0.6-0.20260413193855-1c66c133d41b h1:qrpvoUQzgTos7UFzrygRp8zPviGb2hKz+X11vQmA2jg=
+github.com/bramca/go-syntax-tree v0.0.6-0.20260413193855-1c66c133d41b/go.mod h1:S6voFyIgKuuRLGcgaG4jeD0SH8AtOGBiYqwwY86lupU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

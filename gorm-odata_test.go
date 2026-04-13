@@ -812,7 +812,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	assert.Equal(t, expectedResult, result)
 }
 
-func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
+func Test_BuildQuery_ErrorOnBuildTree(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
 
@@ -822,19 +822,19 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	}{
 		"missing closing bracket": {
 			query:          "length(name",
-			expectedErrMsg: "failed to parse query: missing closing bracket ')'",
+			expectedErrMsg: "failed to parse query: expected closing bracket after unary function length, got \"\"",
 		},
 		"missing opening bracket": {
 			query:          "concat(name,'test')) eq 'nametest'",
-			expectedErrMsg: "failed to parse query: missing opening bracket '('",
+			expectedErrMsg: "failed to parse query: unexpected \")\" without matching opening bracket",
 		},
 		"parse error last part": {
 			query:          "concat(name,'value') qe 'namevalue'",
-			expectedErrMsg: "failed to parse query: possible typo in \"( 'value' ) qe 'namevalue'\"",
+			expectedErrMsg: "failed to parse query: unexpected token \"qe'namevalue'\" (StringOperand) after \"concat\" (Operator)",
 		},
 		"parse error first part": {
 			query:          "concot(name,'value') eq 'namevalue'",
-			expectedErrMsg: "failed to parse query: possible typo in \"concot( name,'value'\"",
+			expectedErrMsg: "failed to parse query: unexpected token \"(\" (OpenDelimiter) after \"concot\" (LeftOperand)",
 		},
 	}
 
@@ -855,6 +855,7 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	}
 }
 
+// TODO: these need fixing
 func Test_BuildQuery_NoInjection(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
@@ -1305,7 +1306,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 	}{
 		"no function or operator": {
 			query:          "name",
-			expectedErrMsg: "failed to parse query: possible typo in \"name\"",
+			expectedErrMsg: "invalid query: unknown query type",
 		},
 		"invalid unary function as root": {
 			query:          "length(name)",
@@ -1338,7 +1339,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 
 			// Assert
 			assert.Error(t, err)
-			assert.Equal(t, err.Error(), testData.expectedErrMsg)
+			assert.Equal(t, testData.expectedErrMsg, err.Error())
 		})
 	}
 }
