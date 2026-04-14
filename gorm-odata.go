@@ -371,7 +371,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			// Build up left child
 			leftChild := root.LeftChild
 			queryLeftOperandString := ""
-			if leftChild.Type == syntaxtree.UnaryFunction {
+			if leftChild.Type == syntaxtree.UnaryOperator {
 				queryLeftOperandString = buildUnaryFuncChain(databaseType, columnTranslation, leftChild)
 			}
 			if leftChild.Value == "concat" {
@@ -384,7 +384,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			// Build up right child
 			rightChild := root.RightChild
 			queryRightOperandString := ""
-			if rightChild.Type == syntaxtree.UnaryFunction {
+			if rightChild.Type == syntaxtree.UnaryOperator {
 				return db, &InvalidQueryError{
 					Msg: "unary operators not supported as right operand of equality operators",
 				}
@@ -430,7 +430,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 			// Build up left child
 			leftChild := root.LeftChild
 			queryLeftOperandString := ""
-			if leftChild.Type == syntaxtree.UnaryFunction {
+			if leftChild.Type == syntaxtree.UnaryOperator {
 				queryLeftOperandString = buildUnaryFuncChain(databaseType, columnTranslation, leftChild)
 			}
 			if leftChild.Value == "concat" {
@@ -485,7 +485,7 @@ func buildGormQuery(root *syntaxtree.Node, db *gorm.DB, databaseType DbType, opT
 				db = db.Where(queryString, queryRightOperandString)
 			}
 		}
-	case syntaxtree.UnaryFunction:
+	case syntaxtree.UnaryOperator:
 		if root.Value != "not" {
 			return db, &InvalidQueryError{
 				Msg: "root level operators other then 'not' are not supported",
@@ -510,7 +510,7 @@ func buildConcat(databaseType DbType, columnTranslation func(string) string, roo
 	if root.Value == "concat" {
 		result = fmt.Sprintf("%s || %s", buildConcat(databaseType, columnTranslation, root.LeftChild), buildConcat(databaseType, columnTranslation, root.RightChild))
 	}
-	if root.Type == syntaxtree.UnaryFunction {
+	if root.Type == syntaxtree.UnaryOperator {
 		result = buildUnaryFuncChain(databaseType, columnTranslation, root)
 	}
 
@@ -527,8 +527,8 @@ func buildConcat(databaseType DbType, columnTranslation func(string) string, roo
 func buildUnaryFuncChain(databaseType DbType, columnTranslation func(string) string, root *syntaxtree.Node) string {
 	result := ""
 	nodesVisited := map[int]bool{}
-	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryFunction {
-		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryFunction && !nodesVisited[root.LeftChild.Id] {
+	for !nodesVisited[root.Id] && root.Type == syntaxtree.UnaryOperator {
+		if root.LeftChild != nil && root.LeftChild.Type == syntaxtree.UnaryOperator && !nodesVisited[root.LeftChild.Id] {
 			root = root.LeftChild
 			continue
 		}
@@ -616,7 +616,7 @@ func validateQueryDepthFirstSearch(tree *syntaxtree.SyntaxTree, validationChecks
 				return err
 			}
 		}
-		if currentNode.Type == syntaxtree.Operator || currentNode.Type == syntaxtree.UnaryFunction {
+		if currentNode.Type == syntaxtree.Operator || currentNode.Type == syntaxtree.UnaryOperator {
 			if currentNode.LeftChild != nil && !nodesVisited[currentNode.LeftChild.Id] {
 				currentNode = currentNode.LeftChild
 				depth += 1
