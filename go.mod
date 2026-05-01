@@ -3,7 +3,7 @@ module github.com/bramca/gorm-odata-filtering
 go 1.26.0
 
 require (
-	github.com/bramca/go-syntax-tree v0.0.5
+	github.com/bramca/go-syntax-tree v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/ing-bank/gormtestutil v0.0.1
 	github.com/stoewer/go-strcase v1.3.1
