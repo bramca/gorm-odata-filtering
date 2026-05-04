@@ -1,9 +1,11 @@
 package gormodata
 
 import (
+	"regexp"
 	"testing"
 	"time"
 
+	syntaxtree "github.com/bramca/go-syntax-tree"
 	"github.com/google/uuid"
 	"github.com/ing-bank/gormtestutil"
 	"github.com/stoewer/go-strcase"
@@ -919,9 +921,9 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 	}{
 		"exfiltration - right operand": {
 			query:               "name eq 'foo' OR '1'='1'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo OR 1=1\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"drop - right operand": {
 			query:               "name eq 'foo'; DROP * from mock_models",
@@ -931,27 +933,27 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 		},
 		"drop - left operand (parsed as field name)": {
 			query:               "DROP * from mock_models;name eq 'foo'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"drop - injection via concat": {
 			query:               "concat(name,;DROP * from mock_models;testValue) eq 'test'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name || test_value = \"test\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"comment injection in value": {
 			query:               "name eq 'foo' --",
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo --\"",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"union select injection in value": {
 			query:               "name eq 'foo' UNION SELECT * FROM mock_models --",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo UNION SELECT * FROM mock_models --\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"always true via contains": {
 			query:               "contains(name,'%')",
@@ -961,9 +963,9 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 		},
 		"nested quote bypass": {
 			query:               "name eq ''' OR 1=1 --'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \" OR 1=1 --\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"double quote in value": {
 			query:               "name eq 'test\"value'",
@@ -1034,6 +1036,13 @@ func Test_BuildQueryWithValidation_ErrorOnInvalidQuery(t *testing.T) {
 			query:          "contains(tolower(testValue),'test') or startswith(metadata/tag/value,'test-2')",
 			validationFunc: WithMaxObjectExpansion(2),
 			expectedErrMsg: "invalid query: query contains value 'metadata/tag/value' that exceeds the maximum allowed object expansion depth: >2",
+		},
+		"error on bad pattern": {
+			query: "contains(concat('-', test-Value), '-test')",
+			validationFunc: WithBadPatternValidation(map[*regexp.Regexp][]syntaxtree.NodeType{
+				regexp.MustCompile(`^[^'].*(;|\*|-)*.*[^']$`): {syntaxtree.RightOperand, syntaxtree.LeftOperand},
+			}),
+			expectedErrMsg: "invalid query: node \"test-Value\" contains a bad pattern",
 		},
 	}
 

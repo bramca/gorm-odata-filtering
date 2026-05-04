@@ -19,10 +19,13 @@ To make sure that object expansion works (e.g. `metadata/name eq 'some-value'`) 
 package main
 
 import (
+	"regexp"
+
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	syntaxtree "github.com/bramca/go-syntax-tree"
 	gormodata "github.com/bramca/gorm-odata-filtering"
 )
 
@@ -55,6 +58,9 @@ func main() {
 		gormodata.WithInputModelValidation(MockModel{}),
 		gormodata.WithMaxTreeDepth(5),
 		gormodata.WithMaxObjectExpansion(2),
+		gormodata.WithBadPatternValidation(map[*regexp.Regexp][]syntaxtree.NodeType{
+			regexp.MustCompile(`(\*|;|-)+`): {syntaxtree.RightOperand},
+		}),
 	)
 
 	if err != nil {
@@ -63,5 +69,4 @@ func main() {
 
 	dbQuery.Find(&result)
 }
-
 ```

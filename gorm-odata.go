@@ -214,6 +214,8 @@ var (
 		"lt":  3,
 		"le":  3,
 	}
+
+	operandBadPattern = regexp.MustCompile(`^[^'].*(\*|;|-)+.*[^']$`)
 )
 
 // QueryValidation
@@ -317,6 +319,28 @@ func WithMaxObjectExpansion(maxObjectExpansion int) QueryValidation {
 	}
 }
 
+// WithBadPatternValidation
+// returns a QueryValidation function that checks queries against a regexp pattern for certain node types
+//
+// that is not allowed or considered a bad pattern
+func WithBadPatternValidation(patternMap map[*regexp.Regexp][]syntaxtree.NodeType) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
+		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
+			for pattern, nodeTypes := range patternMap {
+				if slices.Contains(nodeTypes, currentNode.Type) && pattern.MatchString(currentNode.Value) {
+					return &InvalidQueryError{
+						Msg: fmt.Sprintf("node %q contains a bad pattern", currentNode.Value),
+					}
+				}
+			}
+
+			return nil
+		}
+
+		return validateQueryDepthFirstSearch(tree, validationCheck)
+	}
+}
+
 // BuildQuery
 // builds a gorm query based on an odata query string
 //
@@ -339,6 +363,17 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations
 		if err := validateQuery(tree, db); err != nil {
 			return db, err
 		}
+	}
+
+	// Extra protection against SQL injection
+	err = WithBadPatternValidation(map[*regexp.Regexp][]syntaxtree.NodeType{
+		operandBadPattern: {
+			syntaxtree.LeftOperand,
+			syntaxtree.RightOperand,
+		},
+	})(tree, db)
+	if err != nil {
+		return db, err
 	}
 
 	columnTranslationFunc := func(s string) string {
