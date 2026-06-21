@@ -11,6 +11,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
     strategy:
       matrix:
         go-version: [ '1.26' ]
@@ -22,6 +24,11 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: ./...
 
       - name: Test with Go ${{ matrix.go-version }}
         run: go test -json > TestResults-${{ matrix.go-version }}.json

@@ -1,9 +1,11 @@
 package gormodata
 
 import (
+	"regexp"
 	"testing"
 	"time"
 
+	syntaxtree "github.com/bramca/go-syntax-tree"
 	"github.com/google/uuid"
 	"github.com/ing-bank/gormtestutil"
 	"github.com/stoewer/go-strcase"
@@ -812,7 +814,7 @@ func Test_BuildQuery_ObjectExpansion(t *testing.T) {
 	assert.Equal(t, expectedResult, result)
 }
 
-func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
+func Test_BuildQuery_ErrorOnBuildTree(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
 
@@ -822,19 +824,19 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	}{
 		"missing closing bracket": {
 			query:          "length(name",
-			expectedErrMsg: "failed to parse query: missing closing bracket ')'",
+			expectedErrMsg: "failed to parse query: expected closing bracket after unary function length, got \"\"",
 		},
 		"missing opening bracket": {
 			query:          "concat(name,'test')) eq 'nametest'",
-			expectedErrMsg: "failed to parse query: missing opening bracket '('",
+			expectedErrMsg: "failed to parse query: unexpected \")\" without matching opening bracket",
 		},
 		"parse error last part": {
 			query:          "concat(name,'value') qe 'namevalue'",
-			expectedErrMsg: "failed to parse query: possible typo in \"( 'value' ) qe 'namevalue'\"",
+			expectedErrMsg: "failed to parse query: unexpected token \"qe'namevalue'\" (StringOperand) after \"concat\" (Operator)",
 		},
 		"parse error first part": {
 			query:          "concot(name,'value') eq 'namevalue'",
-			expectedErrMsg: "failed to parse query: possible typo in \"concot( name,'value'\"",
+			expectedErrMsg: "failed to parse query: unexpected token \"(\" (OpenDelimiter) after \"concot\" (LeftOperand)",
 		},
 	}
 
@@ -855,6 +857,7 @@ func Test_BuildQuery_ErrorOnConstructTree(t *testing.T) {
 	}
 }
 
+// TODO: these need fixing
 func Test_BuildQuery_NoInjection(t *testing.T) {
 	t.Parallel()
 	t.Cleanup(cleanupCache)
@@ -918,9 +921,9 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 	}{
 		"exfiltration - right operand": {
 			query:               "name eq 'foo' OR '1'='1'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo OR 1=1\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"drop - right operand": {
 			query:               "name eq 'foo'; DROP * from mock_models",
@@ -930,27 +933,27 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 		},
 		"drop - left operand (parsed as field name)": {
 			query:               "DROP * from mock_models;name eq 'foo'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"drop - injection via concat": {
 			query:               "concat(name,;DROP * from mock_models;testValue) eq 'test'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name || test_value = \"test\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"comment injection in value": {
 			query:               "name eq 'foo' --",
 			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo --\"",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"union select injection in value": {
 			query:               "name eq 'foo' UNION SELECT * FROM mock_models --",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \"foo UNION SELECT * FROM mock_models --\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"always true via contains": {
 			query:               "contains(name,'%')",
@@ -960,9 +963,9 @@ func Test_BuildQuery_NoInjection(t *testing.T) {
 		},
 		"nested quote bypass": {
 			query:               "name eq ''' OR 1=1 --'",
-			expectedSql:         "SELECT * FROM `mock_models` WHERE name = \" OR 1=1 --\"",
+			expectedSql:         "SELECT * FROM `mock_models`",
 			expectedRowAffected: 0,
-			expectedErr:         false,
+			expectedErr:         true,
 		},
 		"double quote in value": {
 			query:               "name eq 'test\"value'",
@@ -1033,6 +1036,13 @@ func Test_BuildQueryWithValidation_ErrorOnInvalidQuery(t *testing.T) {
 			query:          "contains(tolower(testValue),'test') or startswith(metadata/tag/value,'test-2')",
 			validationFunc: WithMaxObjectExpansion(2),
 			expectedErrMsg: "invalid query: query contains value 'metadata/tag/value' that exceeds the maximum allowed object expansion depth: >2",
+		},
+		"error on bad pattern": {
+			query: "contains(concat('-', test-Value), '-test')",
+			validationFunc: WithBadPatternValidation(map[*regexp.Regexp][]syntaxtree.NodeType{
+				regexp.MustCompile(`^[^'].*(;|\*|-)*.*[^']$`): {syntaxtree.RightOperand, syntaxtree.LeftOperand},
+			}),
+			expectedErrMsg: "invalid query: node \"test-Value\" contains a bad pattern",
 		},
 	}
 
@@ -1305,7 +1315,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 	}{
 		"no function or operator": {
 			query:          "name",
-			expectedErrMsg: "failed to parse query: possible typo in \"name\"",
+			expectedErrMsg: "invalid query: unknown query type",
 		},
 		"invalid unary function as root": {
 			query:          "length(name)",
@@ -1338,7 +1348,7 @@ func Test_BuildQuery_ErrorOnInvalidQuery(t *testing.T) {
 
 			// Assert
 			assert.Error(t, err)
-			assert.Equal(t, err.Error(), testData.expectedErrMsg)
+			assert.Equal(t, testData.expectedErrMsg, err.Error())
 		})
 	}
 }

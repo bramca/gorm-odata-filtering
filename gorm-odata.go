@@ -159,198 +159,63 @@ var (
 		},
 	}
 
-	operatorPrecedence = []string{
-		"not",
-		"length",
-		"indexof",
-		"tolower",
-		"toupper",
-		"trim",
-		"year",
-		"month",
-		"day",
-		"hour",
-		"minute",
-		"second",
-		"fractionalsecond",
-		"date",
-		"time",
-		"now",
-		"round",
-		"floor",
-		"ceiling",
-		"concat",
-		"contains",
-		"endswith",
-		"startswith",
-		"eq",
-		"ne",
-		"gt",
-		"ge",
-		"lt",
-		"le",
-		"and",
-		"or",
-	}
-	operatorParsers = []syntaxtree.OperatorParser{
-		{
-			OperatorString:  "eq",
-			OperatorPattern: regexp.MustCompile(`(.*?) eq (.*?)`),
+	odataLexer = &syntaxtree.Lexer{
+		BinaryOperators: []string{
+			"eq",
+			"ne",
+			"gt",
+			"ge",
+			"lt",
+			"le",
+			"and",
+			"or",
 		},
-		{
-			OperatorString:  "ne",
-			OperatorPattern: regexp.MustCompile(`(.*?) ne (.*?)`),
+		BinaryFunctions: []string{
+			"concat",
+			"contains",
+			"endswith",
+			"startswith",
 		},
-		{
-			OperatorString:  "gt",
-			OperatorPattern: regexp.MustCompile(`(.*?) gt (.*?)`),
+		UnaryFunctions: []string{
+			"not",
+			"length",
+			"indexof",
+			"tolower",
+			"toupper",
+			"trim",
+			"year",
+			"month",
+			"day",
+			"hour",
+			"minute",
+			"second",
+			"fractionalsecond",
+			"date",
+			"time",
+			"now",
+			"round",
+			"floor",
+			"ceiling",
 		},
-		{
-			OperatorString:  "ge",
-			OperatorPattern: regexp.MustCompile(`(.*?) ge (.*?)`),
-		},
-		{
-			OperatorString:  "lt",
-			OperatorPattern: regexp.MustCompile(`(.*?) lt (.*?)`),
-		},
-		{
-			OperatorString:  "le",
-			OperatorPattern: regexp.MustCompile(`(.*?) le (.*?)`),
-		},
-		{
-			OperatorString:  "and",
-			OperatorPattern: regexp.MustCompile(`(.*?) and (.*?)`),
-		},
-		{
-			OperatorString:  "or",
-			OperatorPattern: regexp.MustCompile(`(.*?) or (.*?)`),
-		},
+		OpenDelimiter:             '(',
+		CloseDelimiter:            ')',
+		BinaryFunctionOpSeparator: ',',
+		StringDelimiter:           '\'',
+		TokenSeparator:            ' ',
 	}
 
-	binaryFunctionParsers = []syntaxtree.BinaryFunctionParser{
-		{
-			FunctionName:     "concat",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-		{
-			FunctionName:     "contains",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-		{
-			FunctionName:     "endswith",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
-		{
-			FunctionName:     "startswith",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-			OperandSeparator: ',',
-		},
+	odataPrecedence = map[string]int{
+		"or":  1,
+		"and": 2,
+		"eq":  3,
+		"ne":  3,
+		"gt":  3,
+		"ge":  3,
+		"lt":  3,
+		"le":  3,
 	}
 
-	unaryFunctionParsers = []syntaxtree.UnaryFunctionParser{
-		{
-			FunctionName:     "not",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "length",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "indexof",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "tolower",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "toupper",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "trim",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "year",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "month",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "day",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "hour",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "minute",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "second",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "fractionalsecond",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "date",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "time",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "now",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "round",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "floor",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-		{
-			FunctionName:     "ceiling",
-			OpeningDelimiter: '(',
-			ClosingDelimiter: ')',
-		},
-	}
+	operandBadPattern = regexp.MustCompile(`^[^'].*(\*|;|-)+.*[^']$`)
 )
 
 // QueryValidation
@@ -374,14 +239,11 @@ func PrintTree(query string) (string, error) {
 // to get the full abstract syntaxtree for a given query
 func GetAST(query string) (*syntaxtree.SyntaxTree, error) {
 	tree := &syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
+		Lexer:       odataLexer,
+		Precendence: odataPrecedence,
 	}
 
-	err := tree.ConstructTree(query)
+	err := tree.BuildTree(query)
 	if err != nil {
 		return nil, err
 	}
@@ -457,6 +319,28 @@ func WithMaxObjectExpansion(maxObjectExpansion int) QueryValidation {
 	}
 }
 
+// WithBadPatternValidation
+// returns a QueryValidation function that checks queries against a regexp pattern for certain node types
+//
+// that is not allowed or considered a bad pattern
+func WithBadPatternValidation(patternMap map[*regexp.Regexp][]syntaxtree.NodeType) QueryValidation {
+	return func(tree *syntaxtree.SyntaxTree, db *gorm.DB) error {
+		validationCheck := func(depth int, currentNode *syntaxtree.Node) error {
+			for pattern, nodeTypes := range patternMap {
+				if slices.Contains(nodeTypes, currentNode.Type) && pattern.MatchString(currentNode.Value) {
+					return &InvalidQueryError{
+						Msg: fmt.Sprintf("node %q contains a bad pattern", currentNode.Value),
+					}
+				}
+			}
+
+			return nil
+		}
+
+		return validateQueryDepthFirstSearch(tree, validationCheck)
+	}
+}
+
 // BuildQuery
 // builds a gorm query based on an odata query string
 //
@@ -470,15 +354,7 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations
 		return db, err
 	}
 
-	tree := &syntaxtree.SyntaxTree{
-		OperatorPrecedence:    operatorPrecedence,
-		OperatorParsers:       operatorParsers,
-		BinaryFunctionParsers: binaryFunctionParsers,
-		UnaryFunctionParsers:  unaryFunctionParsers,
-		Separator:             ";",
-	}
-
-	err = tree.ConstructTree(query)
+	tree, err := GetAST(query)
 	if err != nil {
 		return db, err
 	}
@@ -487,6 +363,17 @@ func BuildQuery(query string, db *gorm.DB, databaseType DbType, queryValidations
 		if err := validateQuery(tree, db); err != nil {
 			return db, err
 		}
+	}
+
+	// Extra protection against SQL injection
+	err = WithBadPatternValidation(map[*regexp.Regexp][]syntaxtree.NodeType{
+		operandBadPattern: {
+			syntaxtree.LeftOperand,
+			syntaxtree.RightOperand,
+		},
+	})(tree, db)
+	if err != nil {
+		return db, err
 	}
 
 	columnTranslationFunc := func(s string) string {
