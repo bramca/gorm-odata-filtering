@@ -17,14 +17,13 @@ test.report: ## Test the code with coverage report
 
 fmt: ## Format and check the code
 	@go mod tidy
-	@gofumpt -l -w .
-	@golangci-lint run --timeout 600s
+	@golangci-lint fmt --diff
+	@golangci-lint run --fix --timeout 600s
 	@go vet ./...
 	@gosec ./...
 
 tools: ## Install extra tools for development
-	go install mvdan.cc/gofumpt@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install github.com/orlangure/gocovsh@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
 

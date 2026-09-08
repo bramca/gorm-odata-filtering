@@ -8,7 +8,7 @@ import (
 	syntaxtree "github.com/bramca/go-syntax-tree"
 	"github.com/google/uuid"
 	"github.com/ing-bank/gormtestutil"
-	"github.com/stoewer/go-strcase"
+	strcase "github.com/stoewer/go-strcase"
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
 	"github.com/test-go/testify/assert"
 	"gorm.io/gorm"

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	syntaxtree "github.com/bramca/go-syntax-tree"
-	"github.com/survivorbat/go-tsyncmap"
+	tsyncmap "github.com/survivorbat/go-tsyncmap"
 
 	deepgorm "github.com/survivorbat/gorm-deep-filtering"
 	gormqonvert "github.com/survivorbat/gorm-query-convert"
